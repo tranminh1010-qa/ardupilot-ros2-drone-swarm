@@ -1,0 +1,5 @@
+<launch>
+    <node pkg="swarm_control" type="leader_swarm.py" name="leader_drone" output="screen"/>
+    <node pkg="swarm_control" type="f1_swarm.py" name="follower_drone1" output="screen"/>
+    <node pkg="swarm_control" type="f2_swarm.py" name="follower_drone2" output="screen"/>
+</launch>
