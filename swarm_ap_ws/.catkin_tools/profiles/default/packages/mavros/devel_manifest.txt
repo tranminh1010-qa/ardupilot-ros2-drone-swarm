@@ -1,0 +1,21 @@
+mavros/mavros
+/home/sanket/swarm_ap_ws/devel/.private/mavros/cmake.lock /home/sanket/swarm_ap_ws/devel/./cmake.lock
+/home/sanket/swarm_ap_ws/devel/.private/mavros/lib/libmavros_plugins.so /home/sanket/swarm_ap_ws/devel/lib/libmavros_plugins.so
+/home/sanket/swarm_ap_ws/devel/.private/mavros/lib/libmavros.so /home/sanket/swarm_ap_ws/devel/lib/libmavros.so
+/home/sanket/swarm_ap_ws/devel/.private/mavros/lib/python3/dist-packages/mavros/__init__.py /home/sanket/swarm_ap_ws/devel/lib/python3/dist-packages/mavros/__init__.py
+/home/sanket/swarm_ap_ws/devel/.private/mavros/lib/mavros/cmake.lock /home/sanket/swarm_ap_ws/devel/lib/mavros/cmake.lock
+/home/sanket/swarm_ap_ws/devel/.private/mavros/lib/mavros/mavftp /home/sanket/swarm_ap_ws/devel/lib/mavros/mavftp
+/home/sanket/swarm_ap_ws/devel/.private/mavros/lib/mavros/mavwp /home/sanket/swarm_ap_ws/devel/lib/mavros/mavwp
+/home/sanket/swarm_ap_ws/devel/.private/mavros/lib/mavros/mavparam /home/sanket/swarm_ap_ws/devel/lib/mavros/mavparam
+/home/sanket/swarm_ap_ws/devel/.private/mavros/lib/mavros/mavsys /home/sanket/swarm_ap_ws/devel/lib/mavros/mavsys
+/home/sanket/swarm_ap_ws/devel/.private/mavros/lib/mavros/gcs_bridge /home/sanket/swarm_ap_ws/devel/lib/mavros/gcs_bridge
+/home/sanket/swarm_ap_ws/devel/.private/mavros/lib/mavros/checkid /home/sanket/swarm_ap_ws/devel/lib/mavros/checkid
+/home/sanket/swarm_ap_ws/devel/.private/mavros/lib/mavros/event_launcher /home/sanket/swarm_ap_ws/devel/lib/mavros/event_launcher
+/home/sanket/swarm_ap_ws/devel/.private/mavros/lib/mavros/mavros_node /home/sanket/swarm_ap_ws/devel/lib/mavros/mavros_node
+/home/sanket/swarm_ap_ws/devel/.private/mavros/lib/mavros/mavsetp /home/sanket/swarm_ap_ws/devel/lib/mavros/mavsetp
+/home/sanket/swarm_ap_ws/devel/.private/mavros/lib/mavros/install_geographiclib_datasets.sh /home/sanket/swarm_ap_ws/devel/lib/mavros/install_geographiclib_datasets.sh
+/home/sanket/swarm_ap_ws/devel/.private/mavros/lib/mavros/mavcmd /home/sanket/swarm_ap_ws/devel/lib/mavros/mavcmd
+/home/sanket/swarm_ap_ws/devel/.private/mavros/lib/mavros/mavsafety /home/sanket/swarm_ap_ws/devel/lib/mavros/mavsafety
+/home/sanket/swarm_ap_ws/devel/.private/mavros/lib/pkgconfig/mavros.pc /home/sanket/swarm_ap_ws/devel/lib/pkgconfig/mavros.pc
+/home/sanket/swarm_ap_ws/devel/.private/mavros/share/mavros/cmake/mavrosConfig.cmake /home/sanket/swarm_ap_ws/devel/share/mavros/cmake/mavrosConfig.cmake
+/home/sanket/swarm_ap_ws/devel/.private/mavros/share/mavros/cmake/mavrosConfig-version.cmake /home/sanket/swarm_ap_ws/devel/share/mavros/cmake/mavrosConfig-version.cmake

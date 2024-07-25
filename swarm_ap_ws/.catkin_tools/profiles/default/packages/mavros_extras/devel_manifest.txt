@@ -1,0 +1,8 @@
+mavros/mavros_extras
+/home/sanket/swarm_ap_ws/devel/.private/mavros_extras/cmake.lock /home/sanket/swarm_ap_ws/devel/./cmake.lock
+/home/sanket/swarm_ap_ws/devel/.private/mavros_extras/lib/libmavros_extras.so /home/sanket/swarm_ap_ws/devel/lib/libmavros_extras.so
+/home/sanket/swarm_ap_ws/devel/.private/mavros_extras/lib/mavros_extras/servo_state_publisher /home/sanket/swarm_ap_ws/devel/lib/mavros_extras/servo_state_publisher
+/home/sanket/swarm_ap_ws/devel/.private/mavros_extras/lib/mavros_extras/visualization /home/sanket/swarm_ap_ws/devel/lib/mavros_extras/visualization
+/home/sanket/swarm_ap_ws/devel/.private/mavros_extras/lib/pkgconfig/mavros_extras.pc /home/sanket/swarm_ap_ws/devel/lib/pkgconfig/mavros_extras.pc
+/home/sanket/swarm_ap_ws/devel/.private/mavros_extras/share/mavros_extras/cmake/mavros_extrasConfig.cmake /home/sanket/swarm_ap_ws/devel/share/mavros_extras/cmake/mavros_extrasConfig.cmake
+/home/sanket/swarm_ap_ws/devel/.private/mavros_extras/share/mavros_extras/cmake/mavros_extrasConfig-version.cmake /home/sanket/swarm_ap_ws/devel/share/mavros_extras/cmake/mavros_extrasConfig-version.cmake
