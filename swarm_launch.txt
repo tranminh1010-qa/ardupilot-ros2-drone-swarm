@@ -4,3 +4,6 @@
 
 roslaunch mavros apm3.launch fcu_url:=udp://:14550@ mavros_ns:=drone_1 tgt_system:=1
 gazebo iris_ardupilot_ap.world
+
+cd ./swarm_ap_ws/src/swarm_control/scripts
+python leader_swarm.py

@@ -144,6 +144,36 @@ LOITER> mode LAND
          <pose> -5 0 0 0 0 0 </pose>
       </include>
     </model>
+<!-- 
+    <model name="ngps_walls">
+      <pose> 0 0 0 0 0 0 </pose>
+      <include>
+        <uri>model://drone_arena</uri>
+         <pose> 0 0 0 0 0 0 </pose>
+      </include>
+    </model> -->
+ <!--       
+    <model name="slope_ga">
+      <pose> 0 0 0 0 0 0 </pose>
+      <include>
+        <uri>model://slope_ga</uri>
+         <pose> 60 -10 0 1.57079632679 0 1.57079632679 </pose>
+      </include>
+    </model>
+    
+    <model name="slope_30_ga">
+      <pose> 0 0 0 0 0 0 </pose>
+      <include>
+        <uri>model://slope_30_ga</uri>
+         <pose> 100 0 0 1.57079632679 0 1.57079632679 </pose>
+      </include>
+    </model>
+    -->
 
+<!--    <include>
+        <uri>model://arena</uri>
+         <pose> 0 0 0.047 0 0 0 </pose>
+      </include> -->
+    
   </world>
 </sdf>
