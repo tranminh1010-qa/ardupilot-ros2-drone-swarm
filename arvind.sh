@@ -21,11 +21,11 @@ print_message "Cloning ArduPilot repository..."
 git clone --recurse-submodules https://github.com/snktshrma/ardupilot.git -b swarm-gazebo ~/ardupilot
 
 print_message "Installing required Python packages..."
-pip3 install numpy scipy matplotlib
+pip3 install numpy scipy matplotlib -U
 
 print_message "Setting up environment..."
-cd ~/ardupilot
-./Tools/scripts/install-prereqs-ubuntu.sh -y
+cd ardupilot
+./Tools/environment_install/install-prereqs-ubuntu.sh -y
 
 print_message "Building ArduPilot SITL..."
 . ~/.profile
@@ -34,7 +34,7 @@ print_message "Building ArduPilot SITL..."
 
 print_message "SITL setup is complete!"
 
-cd ~
+cd ..
 
 print_message "Installing ROS ws"
 
