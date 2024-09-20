@@ -20,21 +20,10 @@ include_directories(
   ${fastcdr_INCLUDE_DIRS}
 )
 
-# Declare a C++ executable
-add_executable(leader_swarm src/leader_swarm.cpp)
-ament_target_dependencies(leader_swarm rclcpp std_msgs geometry_msgs mavros_msgs)
-
-# Install executables
-install(TARGETS
-  leader_swarm
-  DESTINATION lib/${PROJECT_NAME}
-)
-
 # Install Python scripts
 install(PROGRAMS
   scripts/leader_swarm.py
-  scripts/f1_swarm.py
-  scripts/f2_swarm.py
+  scripts/follower_drone.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

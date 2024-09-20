@@ -2,40 +2,27 @@
 
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import PoseStamped
-from mavros_msgs.msg import State
 from mavros_msgs.srv import CommandBool, SetMode
+from geometry_msgs.msg import PoseStamped
 
 class FollowerDrone(Node):
     def __init__(self, node_name, mavros_prefix, leader_pos_topic, offset):
         super().__init__(node_name)
         self.mavros_prefix = mavros_prefix
+        self.leader_pos_topic = leader_pos_topic
         self.offset = offset
-
-        # Subscriptions
-        self.create_subscription(State, f'{mavros_prefix}/state', self.state_cb, 10)
-        self.create_subscription(PoseStamped, leader_pos_topic, self.leader_pos_cb, 10)
-
-        # Publishers
-        self.local_pos_pub = self.create_publisher(PoseStamped, f'{mavros_prefix}/setpoint_position/local', 10)
-
-        # Service clients
-        self.arming_client = self.create_client(CommandBool, f'{mavros_prefix}/cmd/arming')
-        self.set_mode_client = self.create_client(SetMode, f'{mavros_prefix}/set_mode')
-
-        # State variables
-        self.current_state = State()
-        self.target_position = PoseStamped()
+        self.current_state = None
         self.offboard_mode_set = False
 
-        # Timer
-        self.create_timer(0.05, self.arm_and_takeoff)
+        self.local_pos_pub = self.create_publisher(PoseStamped, f'{self.mavros_prefix}/setpoint_position/local', 10)
+        self.create_subscription(PoseStamped, self.leader_pos_topic, self.leader_position_callback, 10)
+        self.arming_client = self.create_client(CommandBool, f'{self.mavros_prefix}/cmd/arming')
+        self.set_mode_client = self.create_client(SetMode, f'{self.mavros_prefix}/set_mode')
 
-    def state_cb(self, state):
-        self.current_state = state
+        self.arm_and_takeoff_timer = self.create_timer(1.0, self.arm_and_takeoff)
 
-    def leader_pos_cb(self, leader_pos):
-        self.target_position.header = leader_pos.header
+    def leader_position_callback(self, leader_pos):
+        self.target_position = PoseStamped()
         self.target_position.pose.position.x = leader_pos.pose.position.x + self.offset[0]
         self.target_position.pose.position.y = leader_pos.pose.position.y + self.offset[1]
         self.target_position.pose.position.z = leader_pos.pose.position.z + self.offset[2]
@@ -48,7 +35,7 @@ class FollowerDrone(Node):
             await self.set_offboard_mode()
         else:
             self.get_logger().info(f"{self.get_name()} is armed and in OFFBOARD mode")
-            self.destroy_timer(self.arm_and_takeoff)
+            self.destroy_timer(self.arm_and_takeoff_timer)
 
     async def arm_drone(self):
         if self.arming_client.wait_for_service(timeout_sec=1.0):
@@ -69,32 +56,15 @@ class FollowerDrone(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-
-    follower1 = FollowerDrone(
-        node_name='follower_drone1_node',
-        mavros_prefix='/mavros2',
+    follower_drone = FollowerDrone(
+        node_name='follower_drone_node',
+        mavros_prefix='/mavros',
         leader_pos_topic='/leader/position',
-        offset=(1.0, 0.0, 0.0)
+        offset=(0.0, 0.0, 0.0)
     )
-
-    follower2 = FollowerDrone(
-        node_name='follower_drone2_node',
-        mavros_prefix='/mavros3',
-        leader_pos_topic='/leader/position',
-        offset=(0.0, 1.0, 0.0)
-    )
-
-    executor = rclpy.executors.MultiThreadedExecutor()
-    executor.add_node(follower1)
-    executor.add_node(follower2)
-
-    try:
-        executor.spin()
-    finally:
-        executor.shutdown()
-        follower1.destroy_node()
-        follower2.destroy_node()
-        rclpy.shutdown()
+    rclpy.spin(follower_drone)
+    follower_drone.destroy_node()
+    rclpy.shutdown()
 
 if __name__ == '__main__':
     main()

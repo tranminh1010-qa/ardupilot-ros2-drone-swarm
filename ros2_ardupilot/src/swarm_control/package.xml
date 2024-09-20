@@ -12,6 +12,8 @@
   <build_depend>geometry_msgs</build_depend>
   <build_depend>mavros_msgs</build_depend>
 
+  <exec_depend>leader_swarm.py</exec_depend>
+  <exec_depend>follower_drone.py</exec_depend>
   <exec_depend>rclcpp</exec_depend>
   <exec_depend>rclpy</exec_depend>
   <exec_depend>std_msgs</exec_depend>

@@ -6,14 +6,25 @@ def generate_launch_description():
     return LaunchDescription([
         Node(
             package='swarm_control',
-            executable='leader_swarm',
+            executable='leader_swarm.py',
             name='leader_drone',
-            output='screen'
+            output='screen',
+            parameters=[{'use_sim_time': True}]
         ),
         Node(
             package='swarm_control',
-            executable='follower_drone',
-            name='follower_drone',
-            output='screen'
+            executable='follower_drone.py',
+            name='follower_drone_1',
+            output='screen',
+            parameters=[{'use_sim_time': True}],
+            remappings=[('/mavros', '/mavros1')]
+        ),
+        Node(
+            package='swarm_control',
+            executable='follower_drone.py',
+            name='follower_drone_2',
+            output='screen',
+            parameters=[{'use_sim_time': True}],
+            remappings=[('/mavros', '/mavros2')]
         )
     ])
