@@ -1,0 +1,5 @@
+
+# GPS noise parameters
+SIM_GPS_POSNOISE 0.5  # Position noise in meters
+SIM_GPS_VELNOISE 0.1  # Velocity noise in m/s
+SIM_GPS_HGTNOISE 0.2  # Height noise in meters

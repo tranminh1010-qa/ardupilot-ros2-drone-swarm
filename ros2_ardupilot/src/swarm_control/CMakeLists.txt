@@ -24,6 +24,7 @@ include_directories(
 install(PROGRAMS
   scripts/leader_swarm.py
   scripts/follower_drone.py
+  scripts/flight_data_logger.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

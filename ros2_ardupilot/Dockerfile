@@ -72,3 +72,7 @@ RUN mkdir -p ~/ardu_ws/src \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /root/ardu_ws
+
+# Set up environment for Gazebo
+ENV DISPLAY=:0
+ENV QT_X11_NO_MITSHM=1
