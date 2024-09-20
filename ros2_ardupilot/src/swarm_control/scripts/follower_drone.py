@@ -2,6 +2,7 @@
 
 import rclpy
 from rclpy.node import Node
+from mavros_msgs.msg import State
 from mavros_msgs.srv import CommandBool, SetMode
 from geometry_msgs.msg import PoseStamped
 
@@ -11,7 +12,7 @@ class FollowerDrone(Node):
         self.mavros_prefix = mavros_prefix
         self.leader_pos_topic = leader_pos_topic
         self.offset = offset
-        self.current_state = None
+        self.current_state = State()
         self.offboard_mode_set = False
 
         self.local_pos_pub = self.create_publisher(PoseStamped, f'{self.mavros_prefix}/setpoint_position/local', 10)
@@ -29,6 +30,9 @@ class FollowerDrone(Node):
         self.local_pos_pub.publish(self.target_position)
 
     async def arm_and_takeoff(self):
+        if self.current_state is None:
+            self.get_logger().error('Current state is not initialized')
+            return
         if not self.current_state.armed:
             await self.arm_drone()
         elif not self.offboard_mode_set:

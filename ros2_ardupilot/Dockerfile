@@ -10,6 +10,14 @@ ENV PYTHON_SETUPTOOLS_VERSION=65.5.1
 ENV PYTHON_GET_PIP_URL=https://github.com/pypa/get-pip/raw/9af82b715db434abb94a0a6f3569f43e72157346/public/get-pip.py
 ENV PYTHON_GET_PIP_SHA256=45a2bb8bf2bb5eff16fdd00faef6f29731831c7c59bd9fc2bf1f3bed511ff1fe
 
+# Add these lines to suppress audio-related errors
+ENV SDL_AUDIODRIVER=dummy
+ENV ALSA_CONFIG_PATH=/usr/share/alsa/alsa.conf.example
+ENV ALSOFT_CONF=/root/alsoft.conf
+
+# Create the OpenAL configuration file
+RUN echo "drivers=null" > /root/alsoft.conf
+
 RUN apt-get update && apt-get install --no-install-recommends -y \
     lsb-release sudo wget software-properties-common build-essential ccache \
     g++ gdb gawk git make cmake ninja-build libtool libxml2-dev libxml2-utils \
