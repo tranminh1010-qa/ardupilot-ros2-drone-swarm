@@ -11,44 +11,31 @@ The following will build the image with the name `ardupilot/ardupilot-dev-ros` u
 
 This is to build the image
 ```bash
-cd ros2_ardupilot/ardupilot_dev_docker/docker
-docker build -t ardupilot/ardupilot-dev-ros -f Dockerfile_dev-ros .
+cd ros2_ardupilot/
+docker build -t ardupilot-ros .
 ```
 
-
-This is to run the container in interactive mode
+This is to run the container in interactive mode and maintain the name `ardupilot-ros`. The `-v` flag is used to mount the `src` folder in the current directory to the `src` folder in the container. This is so that we can edit the code in the host machine and run it in the container.
 ```bash
-docker run -it --name ardupilot-dds ardupilot/ardupilot-dev-ros
+docker run -it --name ardupilot-ros -v $(pwd)/src/swarm_control:/root/ardu_ws/src/swarm_control ardupilot-ros
 ```
 
-Then we need to run the following inside the container
+To access once the container is running
+```bash
+docker container exec -it ardupilot-ros /bin/bash
+````
+
+
+Then we use the following to test everything is working correctly once inside the container
 
 ```bash
-mkdir -p ~/ardu_ws/src
-cd ~/ardu_ws
-vcs import --recursive --input  https://raw.githubusercontent.com/ArduPilot/ardupilot/master/Tools/ros2/ros2.repos src
-
-# Now, we need to build the workspace
-
-cd ~/ardu_ws
-sudo apt update
+source /opt/ros/humble/setup.bash
 rosdep update
-source /opt/ros/humble/setup.bash
-rosdep install --from-paths src --ignore-src
-
-# Installing the MicroXRCEDDSGen build dependency:
-
-sudo apt install default-jre
-git clone --recurse-submodules https://github.com/ardupilot/Micro-XRCE-DDS-Gen.git
-cd ~/ardu_ws/src/Micro-XRCE-DDS-Gen
-./gradlew assemble
-echo "export PATH=\$PATH:$PWD/scripts" >> ~/.bashrc
-source ~/.bashrc
-
-# Source the environment and start building
-
-sudo apt update
-source /opt/ros/humble/setup.bash
-cd ~/ardu_ws
 colcon build --packages-up-to ardupilot_dds_tests
+```
+
+After that the environment is ready to be used.
+```bash
+rosdep install --from-paths ~/ardu_ws/src --ignore-src -r -y
+colcon build
 ```

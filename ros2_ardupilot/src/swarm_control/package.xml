@@ -3,7 +3,8 @@
   <name>swarm_control</name>
   <version>0.0.0</version>
   <description>The swarm_control package</description>
-
+  <maintainer email="maintainer@example.com">Maintainer Name</maintainer>
+  <license>BSD</license>
   <buildtool_depend>ament_cmake</buildtool_depend>
   <build_depend>rclcpp</build_depend>
   <build_depend>rclpy</build_depend>

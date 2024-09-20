@@ -8,163 +8,96 @@ from mavros_msgs.srv import CommandBool, SetMode, CommandTOL
 class LeaderDrone(Node):
     def __init__(self):
         super().__init__('leader_drone_node')
-        self.state_sub1 = self.create_subscription(State, '/d1/mavros/state', self.state_cb1, 10)
-        self.local_pos_pub1 = self.create_publisher(PoseStamped, '/d1/mavros/setpoint_position/local', 10)
-
-        self.arming_client1 = self.create_client(CommandBool, '/d1/mavros/cmd/arming')
-        self.set_mode_client1 = self.create_client(SetMode, '/d1/mavros/set_mode')
-        self.set_takeoff_client1 = self.create_client(CommandTOL, '/d1/mavros/cmd/takeoff')
-
-        self.state_sub2 = self.create_subscription(State, '/d2/mavros/state', self.state_cb2, 10)
-        self.local_pos_pub2 = self.create_publisher(PoseStamped, '/d2/mavros/setpoint_position/local', 10)
-
-        self.arming_client2 = self.create_client(CommandBool, '/d2/mavros/cmd/arming')
-        self.set_mode_client2 = self.create_client(SetMode, '/d2/mavros/set_mode')
-        self.set_takeoff_client2 = self.create_client(CommandTOL, '/d2/mavros/cmd/takeoff')
-
-        self.state_sub3 = self.create_subscription(State, '/d3/mavros/state', self.state_cb3, 10)
-        self.local_pos_pub3 = self.create_publisher(PoseStamped, '/d3/mavros/setpoint_position/local', 10)
-
-        self.arming_client3 = self.create_client(CommandBool, '/d3/mavros/cmd/arming')
-        self.set_mode_client3 = self.create_client(SetMode, '/d3/mavros/set_mode')
-        self.set_takeoff_client3 = self.create_client(CommandTOL, '/d3/mavros/cmd/takeoff')
-
-        self.current_state1 = State()
-        self.current_state2 = State()
-        self.current_state3 = State()
-
-        self.current_pose1 = PoseStamped()
-
-        self.target_position1 = PoseStamped()
-        self.target_position1.pose.position.x = 0
-        self.target_position1.pose.position.y = 0
-        self.target_position1.pose.position.z = 5  # Set initial altitude to 5m
-
-        self.target_position2 = PoseStamped()
-        self.target_position2.pose.position.x = self.target_position1.pose.position.x
-        self.target_position2.pose.position.y = self.target_position1.pose.position.y
-        self.target_position2.pose.position.z = self.target_position1.pose.position.z  # Set initial altitude to 5m
-
-        self.target_position3 = PoseStamped()
-        self.target_position3.pose.position.x = self.target_position1.pose.position.x
-        self.target_position3.pose.position.y = self.target_position1.pose.position.y
-        self.target_position3.pose.position.z = self.target_position1.pose.position.z # Set initial altitude to 5m
-
+        self.num_drones = 3
+        self.drones = self._initialize_drones()
+        self.takeoff_altitude = 5.0
         self.takeoff_complete = False
         self.timer = self.create_timer(0.05, self.arm_and_takeoff)
-        self.guided_mode_set1 = False
-        self.guided_mode_set2 = False
-        self.guided_mode_set3 = False
 
-        self.pose_sub1 = self.create_subscription(PoseStamped, '/d1/mavros/local_position/pose', self.pose_cb1, 10)
-        self.lx = 0.0
-        self.ly = 0.0
-        self.lz = 0.0
+    def _initialize_drones(self):
+        drones = []
+        for j in range(1, self.num_drones + 1):
+            prefix = f'/d{j}/mavros'
+            drone = {
+                'state_sub': self.create_subscription(State, f'{prefix}/state', lambda msg, i=j: self._state_cb(msg, i), 10),
+                'local_pos_pub': self.create_publisher(PoseStamped, f'{prefix}/setpoint_position/local', 10),
+                'arming_client': self.create_client(CommandBool, f'{prefix}/cmd/arming'),
+                'set_mode_client': self.create_client(SetMode, f'{prefix}/set_mode'),
+                'set_takeoff_client': self.create_client(CommandTOL, f'{prefix}/cmd/takeoff'),
+                'current_state': State(),
+                'target_position': PoseStamped(),
+                'guided_mode_set': False
+            }
+            if j == 1:
+                drone['pose_sub'] = self.create_subscription(PoseStamped, f'{prefix}/local_position/pose', self._pose_cb, 10)
+                drone['current_pose'] = PoseStamped()
+            drones.append(drone)
+        return drones
 
-    def state_cb1(self, state):
-        self.current_state1 = state
+    def _state_cb(self, state, drone_index):
+        self.drones[drone_index - 1]['current_state'] = state
 
-    def state_cb2(self, state):
-        self.current_state2 = state
+    def _pose_cb(self, pose):
+        self.drones[0]['current_pose'] = pose
+        if self.takeoff_complete:
+            self._update_follower_positions(pose)
 
-    def state_cb3(self, state):
-        self.current_state3 = state
+    def _update_follower_positions(self, leader_pose):
+        for i in range(1, self.num_drones):
+            self.drones[i]['target_position'].pose.position = leader_pose.pose.position
+            self.drones[i]['local_pos_pub'].publish(self.drones[i]['target_position'])
 
-    def arm_and_takeoff(self):
-        if not (self.guided_mode_set1 and self.guided_mode_set2 and self.guided_mode_set3):
-            if self.set_mode_client1.wait_for_service(timeout_sec=1.0):
-                req = SetMode.Request()
-                req.custom_mode = "GUIDED"
-                self.set_mode_client1.call_async(req)
-            if self.set_mode_client2.wait_for_service(timeout_sec=1.0):
-                req = SetMode.Request()
-                req.custom_mode = "GUIDED"
-                self.set_mode_client2.call_async(req)
-            if self.set_mode_client3.wait_for_service(timeout_sec=1.0):
-                req = SetMode.Request()
-                req.custom_mode = "GUIDED"
-                self.set_mode_client3.call_async(req)
-            if self.current_state1.mode == "GUIDED":
-                self.guided_mode_set1 = True
-            if self.current_state2.mode == "GUIDED":
-                self.guided_mode_set2 = True
-            if self.current_state3.mode == "GUIDED":
-                self.guided_mode_set3 = True
+    async def arm_and_takeoff(self):
+        if not all(drone['guided_mode_set'] for drone in self.drones):
+            await self._set_guided_mode()
             return
 
-        if not (self.current_state1.armed and self.current_state2.armed and self.current_state3.armed):
-            if self.arming_client1.wait_for_service(timeout_sec=1.0):
-                req = CommandBool.Request()
-                req.value = True
-                self.arming_client1.call_async(req)
-            if self.arming_client2.wait_for_service(timeout_sec=1.0):
-                req = CommandBool.Request()
-                req.value = True
-                self.arming_client2.call_async(req)
-            if self.arming_client3.wait_for_service(timeout_sec=1.0):
-                req = CommandBool.Request()
-                req.value = True
-                self.arming_client3.call_async(req)
+        if not all(drone['current_state'].armed for drone in self.drones):
+            await self._arm_drones()
             return
 
-        if self.set_takeoff_client1.wait_for_service(timeout_sec=1.0):
-            req = CommandTOL.Request()
-            req.altitude = 5.0
-            self.set_takeoff_client1.call_async(req)
-        if self.set_takeoff_client2.wait_for_service(timeout_sec=1.0):
-            req = CommandTOL.Request()
-            req.altitude = 5.0
-            self.set_takeoff_client2.call_async(req)
-        if self.set_takeoff_client3.wait_for_service(timeout_sec=1.0):
-            req = CommandTOL.Request()
-            req.altitude = 5.0
-            self.set_takeoff_client3.call_async(req)
+        if not self.takeoff_complete:
+            await self._takeoff_drones()
 
-        self.get_logger().info("Leader drone taking off to 5m altitude")
+    async def _set_guided_mode(self):
+        for drone in self.drones:
+            if not drone['guided_mode_set']:
+                if drone['set_mode_client'].wait_for_service(timeout_sec=1.0):
+                    req = SetMode.Request(custom_mode="GUIDED")
+                    await drone['set_mode_client'].call_async(req)
+                if drone['current_state'].mode == "GUIDED":
+                    drone['guided_mode_set'] = True
 
-        # Wait until the drones reach the desired altitude
-        if self.current_pose1.pose.position.z < 4.9:  # Adding a small margin to ensure stability at the altitude
-            self.get_logger().info("Waiting for the drone to reach takeoff altitude...")
+    async def _arm_drones(self):
+        for drone in self.drones:
+            if not drone['current_state'].armed:
+                if drone['arming_client'].wait_for_service(timeout_sec=1.0):
+                    req = CommandBool.Request(value=True)
+                    await drone['arming_client'].call_async(req)
+
+    async def _takeoff_drones(self):
+        for drone in self.drones:
+            if drone['set_takeoff_client'].wait_for_service(timeout_sec=1.0):
+                req = CommandTOL.Request(altitude=self.takeoff_altitude)
+                await drone['set_takeoff_client'].call_async(req)
+
+        self.get_logger().info(f"Drones taking off to {self.takeoff_altitude}m altitude")
+
+        if self.drones[0]['current_pose'].pose.position.z < self.takeoff_altitude - 0.1:
+            self.get_logger().info("Waiting for the drones to reach takeoff altitude...")
             return
 
         self.get_logger().info("Drones have reached takeoff altitude")
         self.takeoff_complete = True
         self.timer.cancel()
 
-    def pose_cb1(self, pose):
-        # Only update positions after takeoff is complete
-        self.current_pose1 = pose
-        self.lx = pose.pose.position.x
-        self.ly = pose.pose.position.y
-        self.lz = pose.pose.position.z
+    def send_position(self, x, y, z):
+        self.drones[0]['target_position'].pose.position.x = x
+        self.drones[0]['target_position'].pose.position.y = y
+        self.drones[0]['target_position'].pose.position.z = z
+        self.drones[0]['local_pos_pub'].publish(self.drones[0]['target_position'])
 
-        if self.takeoff_complete:
-            self.target_position2.pose.position.x = self.lx
-            self.target_position2.pose.position.y = self.ly
-            self.target_position2.pose.position.z = self.lz
-            self.local_pos_pub2.publish(self.target_position2)
-
-            self.target_position3.pose.position.x = self.lx
-            self.target_position3.pose.position.y = self.ly
-            self.target_position3.pose.position.z = self.lz
-            self.local_pos_pub3.publish(self.target_position3)
-
-    def send_position1(self, x, y, z):
-        self.target_position1.pose.position.x = x
-        self.target_position1.pose.position.y = y
-        self.target_position1.pose.position.z = z
-        self.local_pos_pub1.publish(self.target_position1)
-
-        self.target_position2.pose.position.x = self.lx
-        self.target_position2.pose.position.y = self.ly
-        self.target_position2.pose.position.z = self.lz
-        self.local_pos_pub2.publish(self.target_position2)
-
-        self.target_position3.pose.position.x = self.lx
-        self.target_position3.pose.position.y = self.ly
-        self.target_position3.pose.position.z = self.lz
-        self.local_pos_pub3.publish(self.target_position3)
-
+        self._update_follower_positions(self.drones[0]['current_pose'])
         self.get_logger().info(f"Leader drone moving to position: {x}, {y}, {z}")
 
 def main(args=None):
