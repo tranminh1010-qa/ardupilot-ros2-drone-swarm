@@ -65,12 +65,35 @@ RUN wget -qO- "$ARM_TARBALL_URL" | tar jx -C /opt \
     && mkdir -p $HOME/arm-gcc \
     && ln -s -f /opt/$ARM_ROOT $HOME/arm-gcc/g++-10.2.1
 
+# Stage: Build micro_ros_msgs
+FROM base AS micro_ros_msgs_builder
+RUN mkdir -p /ros2_ws/src
+WORKDIR /ros2_ws
+RUN git clone -b humble https://github.com/micro-ROS/micro_ros_msgs.git src/micro_ros_msgs
+RUN . /opt/ros/humble/setup.sh && \
+    colcon build --packages-select micro_ros_msgs
+
+# Stage: Build Micro XRCE-DDS Gen
+FROM base AS xrce_dds_gen_builder
+RUN apt-get update && apt-get install -y default-jdk maven
+RUN git clone --recursive https://github.com/eProsima/Micro-XRCE-DDS-Gen.git \
+    && cd Micro-XRCE-DDS-Gen \
+    && ./gradlew assemble \
+    && cp build/libs/microxrceddsgen.jar /usr/local/bin/microxrceddsgen.jar \
+    && echo '#!/bin/sh\njava -jar /usr/local/bin/microxrceddsgen.jar "$@"' > /usr/local/bin/microxrceddsgen \
+    && chmod +x /usr/local/bin/microxrceddsgen
+
 # Stage 4: Final image
 FROM base AS final
 COPY --from=dds_builder /usr/local /usr/local
 COPY --from=arm_toolchain /opt /opt
 COPY --from=arm_toolchain /usr/lib/ccache /usr/lib/ccache
 COPY --from=arm_toolchain /root/arm-gcc /root/arm-gcc
+COPY --from=micro_ros_msgs_builder /ros2_ws/install /opt/ros/humble
+COPY --from=xrce_dds_gen_builder /usr/local/bin/microxrceddsgen* /usr/local/bin/
+
+# Install Java Runtime for microxrceddsgen
+RUN apt-get update && apt-get install -y default-jre && rm -rf /var/lib/apt/lists/*
 
 ENV PATH="/opt/gcc-arm-none-eabi-10/bin:/usr/lib/ccache:/usr/local/bin:$PATH"
 ENV PATH="/root/ardu_ws/src/ardupilot/Tools/autotest:${PATH}"
@@ -80,10 +103,16 @@ RUN mkdir -p ~/ardu_ws/src \
     && vcs import --recursive --input https://raw.githubusercontent.com/ArduPilot/ardupilot/master/Tools/ros2/ros2.repos src \
     && rosdep update \
     && . /opt/ros/humble/setup.sh \
-    && rosdep install --from-paths ~/ardu_ws/src --ignore-src -r -y || true \
+    && rosdep install --from-paths ~/ardu_ws/src --ignore-src -r -y \
+    && colcon build --symlink-install \
     && echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc \
-    && echo "if [ -f ~/ardu_ws/install/setup.bash ]; then source ~/ardu_ws/install/setup.bash; fi" >> ~/.bashrc \
-    && echo "export CMAKE_PREFIX_PATH=\$CMAKE_PREFIX_PATH:/usr/local/share/fastcdr:/usr/local/share/fastrtps" >> ~/.bashrc
+    && echo "source ~/ardu_ws/install/setup.bash" >> ~/.bashrc \
+    && echo "export CMAKE_PREFIX_PATH=\$CMAKE_PREFIX_PATH:/usr/local/lib/cmake/fastcdr:/usr/local/lib/cmake/fastrtps" >> ~/.bashrc
+
+# Verify installations
+RUN ls -l /usr/local/lib/cmake/fastcdr || echo "Fast-CDR not found" \
+    && ls -l /usr/local/lib/cmake/fastrtps || echo "Fast-RTPS not found" \
+    && which microxrceddsgen || echo "microxrceddsgen not found"
 
 COPY entrypoint.sh /entrypoint.sh
 WORKDIR /root/ardu_ws
