@@ -28,16 +28,14 @@ In order to have the GUI working, we need to do the following step to allow the 
 This is to run the container in interactive mode and maintain the name `ardupilot-ros`. The `-v` flag is used to mount the `src` folder in the current directory to the `src` folder in the container. This is so that we can edit the code in the host machine and run it in the container.
 ```bash
 xhost +local:docker
-docker run --net=host \
-  --name="ardupilot-ros2" \
+docker run -it --net=host \
+  --name="ardupilot-ros22" \
   --env="DISPLAY" \
   --env="QT_X11_NO_MITSHM=1" \
   --volume="/tmp/.X11-unix:/tmp/.X11-unix:rw" \
   --volume="$HOME/.Xauthority:/root/.Xauthority:rw" \
-  --volume="$(pwd)/ardupilot:/root/ardu_ws/src/ardupilot" \
-  --volume="$(pwd)/src/swarm_control:/root/ardu_ws/src/swarm_control" \
-  --entrypoint /bin/bash \
-  ardupilot-ros2 -c "tail -f /dev/null"
+  --volume="$(pwd)/src/swarm_control:/home/ardupilot/ardu_ws/src/swarm_control" \
+  ardupilot-ros2
 ```
 IF there is an error, try this:: `sudo chmod 1777 /tmp/.X11-unix `
 
