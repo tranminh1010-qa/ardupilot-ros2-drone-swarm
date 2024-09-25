@@ -35,7 +35,7 @@ docker run -it --net=host \
   --env="QT_X11_NO_MITSHM=1" \
   --volume="/tmp/.X11-unix:/tmp/.X11-unix:rw" \
   --volume="$HOME/.Xauthority:/root/.Xauthority:rw" \
-  --volume="$(pwd)/src/swarm_control:/home/ardupilot/ardu_ws/src/swarm_control" \
+  --volume="$(pwd)/src/swarm_control:/root/ardu_ws/src/swarm_control" \
   ardupilot-ros2
 ```
 The terminal should hang, to continue, open a new terminal and keep working. 
@@ -70,4 +70,10 @@ In a separate terminal, run the following to see the list of publishers
 docker container exec -it ardupilot-ros23 /bin/bash
  source ~/ardu_ws/install/setup.bash
 ros2 -t topic list
+```
+
+Finally, to run the simulation in gazebo, run the following in yet another terminal
+```bash
+source install/setup.bash
+ros2 launch ardupilot_gz_bringup iris_runway.launch.py
 ```
