@@ -11,27 +11,26 @@ def generate_launch_description():
     launch_dir = os.path.join(bringup_dir, 'launch')
 
     # Configure Gazebo Harmonic
-    gz_sim = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource([os.path.join(
-            get_package_share_directory('ros_gz_sim'), 'launch'), '/gz_sim.launch.py']),
-        launch_arguments={'gz_args': '-r empty.sdf'}.items()
+    gz_sim = ExecuteProcess(
+        cmd=['gz', 'sim', '-r', 'empty.sdf'],
+        output='screen'
     )
 
     # Launch ArduPilot SITL for multiple drones
     def create_drone_sitl(drone_id):
         return ExecuteProcess(
             cmd=[
-                'sim_vehicle.py',
+                '/root/ardu_ws/src/ardupilot/Tools/autotest/sim_vehicle.py',
                 '-v', 'ArduCopter',
                 '-f', 'gazebo-iris',
-                '--model', 'x',
+                '--model', 'gazebo-iris',
                 '--speedup', '1',
                 '-I' + str(drone_id),
                 '--sysid', str(drone_id + 1),
-                '--out', f'udp:127.0.0.1:{14550 + drone_id}',
-                '--mavproxy-args', f'--out=udp:127.0.0.1:{14560 + drone_id}'
+                '--out', f'127.0.0.1:{14550 + drone_id}',
+                '--out', f'127.0.0.1:{14560 + drone_id}'
             ],
-            name=f'ardupilot_sitl_drone_{drone_id}',
+            cwd='/root/ardu_ws/src/ardupilot',
             output='screen'
         )
 
@@ -45,7 +44,7 @@ def generate_launch_description():
                 '-x', str(x),
                 '-y', str(y),
                 '-z', str(z),
-                '-file', os.path.join(get_package_share_directory('ardupilot_gz_description'), 'models', 'iris', 'model.sdf')
+                '-file', os.path.join(get_package_share_directory('ardupilot_gazebo'), 'models', 'iris_with_ardupilot', 'model.sdf')
             ],
             output='screen'
         )
@@ -77,9 +76,8 @@ def generate_launch_description():
             executable='follower_drone.py',
             name=f'follower_drone_node_{i}',
             parameters=[{
-                'node_name': f'follower_drone_node_{i}',
-                'mavlink_connection': f'udp:localhost:{14551 + i + 1}',
-                'leader_pos_topic': '/leader_drone_node/position',
+                'mavlink_connection': f'udp:localhost:{14552 + i}',
+                'leader_pos_topic': 'leader_position',
                 'offset': [2.0 * (i + 1), 0.0, 0.0]  # Adjust offsets as needed
             }],
             output='screen'

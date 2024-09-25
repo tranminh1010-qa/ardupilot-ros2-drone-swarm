@@ -4,7 +4,6 @@ from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped
 from pymavlink import mavutil
 
-
 class LeaderDrone(Node):
     def __init__(self):
         super().__init__('leader_drone_node')
@@ -17,7 +16,7 @@ class LeaderDrone(Node):
         self.mavlink_connection = mavutil.mavlink_connection(mavlink_connection)
         self.mavlink_connection.wait_heartbeat()
 
-        self.position_pub = self.create_publisher(PoseStamped, 'position', 10)
+        self.position_pub = self.create_publisher(PoseStamped, 'leader_position', 10)
         self.timer = self.create_timer(0.1, self.publish_position)
 
     def publish_position(self):
@@ -31,14 +30,12 @@ class LeaderDrone(Node):
             pose.pose.position.z = -msg.z  # NED to ENU conversion
             self.position_pub.publish(pose)
 
-
 def main(args=None):
     rclpy.init(args=args)
     leader = LeaderDrone()
     rclpy.spin(leader)
     leader.destroy_node()
     rclpy.shutdown()
-
 
 if __name__ == '__main__':
     main()

@@ -4,12 +4,11 @@ from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped
 from pymavlink import mavutil
 
-
 class FollowerDrone(Node):
     def __init__(self):
         super().__init__('follower_drone_node')
         self.declare_parameter('mavlink_connection', 'udp:localhost:14552')
-        self.declare_parameter('leader_pos_topic', '/leader_drone_node/position')
+        self.declare_parameter('leader_pos_topic', 'leader_position')
         self.declare_parameter('offset', [1.0, 0.0, 0.0])
 
         mavlink_connection = self.get_parameter('mavlink_connection').value
@@ -31,12 +30,12 @@ class FollowerDrone(Node):
             self.mavlink_connection.target_system,
             self.mavlink_connection.target_component,
             mavutil.mavlink.MAV_FRAME_LOCAL_NED,
-            0b0000111111111000,  # type_mask (only positions enabled)
-            target_x, target_y, -target_z,  # NED frame
-            0, 0, 0,  # velocity
-            0, 0, 0,  # acceleration
-            0, 0)
-
+            0b110111111000,  # type_mask (only positions enabled)
+            target_x, target_y, target_z,  # x, y, z positions
+            0, 0, 0,  # x, y, z velocity
+            0, 0, 0,  # x, y, z acceleration
+            0, 0  # yaw, yaw_rate
+        )
 
 def main(args=None):
     rclpy.init(args=args)
@@ -44,7 +43,6 @@ def main(args=None):
     rclpy.spin(follower)
     follower.destroy_node()
     rclpy.shutdown()
-
 
 if __name__ == '__main__':
     main()

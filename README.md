@@ -68,13 +68,12 @@ ros2 launch ardupilot_sitl sitl_dds_udp.launch.py transport:=udp4 synthetic_cloc
 In a separate terminal, run the following to see the list of publishers
 ```bash
 docker container exec -it ardupilot-ros23 /bin/bash
- source ~/ardu_ws/install/setup.bash
+source ~/ardu_ws/install/setup.bash
 ros2 -t topic list
 ```
 
 Finally, to run the simulation in gazebo, run the following in yet another terminal
 ```bash
-source install/setup.bash
 ros2 launch ardupilot_gz_bringup iris_runway.launch.py
 ```
 
@@ -85,5 +84,5 @@ To run the code, we need to first build the workspace. This is done by running t
 cd ~/ardu_ws
 colcon build --packages-select swarm_control --symlink-install
 source install/setup.bash
-ros2 launch swarm_control swarm_control.launch.py
+ros2 launch swarm_control swarm.launch.py
 ```
