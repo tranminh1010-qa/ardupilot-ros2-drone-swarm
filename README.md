@@ -49,7 +49,7 @@ To access once the container is running
 docker container exec -it ardupilot-ros2 /bin/bash
 ````
 
-### 5. Test everything is working correctly 
+### 5. Test everything is working correctly  (Optional)
 Then we use the following to test everything is working correctly once inside the container
 
 ```bash
@@ -76,4 +76,14 @@ Finally, to run the simulation in gazebo, run the following in yet another termi
 ```bash
 source install/setup.bash
 ros2 launch ardupilot_gz_bringup iris_runway.launch.py
+```
+
+### 6. Running the code
+
+To run the code, we need to first build the workspace. This is done by running the following in the container.
+```bash
+cd ~/ardu_ws
+colcon build --packages-select swarm_control --symlink-install
+source install/setup.bash
+ros2 launch swarm_control swarm_control.launch.py
 ```

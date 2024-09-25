@@ -1,7 +1,0 @@
-mavros/libmavconn
-/home/sanket/swarm_ap_ws/devel/.private/libmavconn/cmake.lock /home/sanket/swarm_ap_ws/devel/./cmake.lock
-/home/sanket/swarm_ap_ws/devel/.private/libmavconn/lib/libmavconn.so /home/sanket/swarm_ap_ws/devel/lib/libmavconn.so
-/home/sanket/swarm_ap_ws/devel/.private/libmavconn/lib/pkgconfig/libmavconn.pc /home/sanket/swarm_ap_ws/devel/lib/pkgconfig/libmavconn.pc
-/home/sanket/swarm_ap_ws/devel/.private/libmavconn/share/libmavconn/cmake/libmavconnConfig.cmake /home/sanket/swarm_ap_ws/devel/share/libmavconn/cmake/libmavconnConfig.cmake
-/home/sanket/swarm_ap_ws/devel/.private/libmavconn/share/libmavconn/cmake/libmavconnConfig-version.cmake /home/sanket/swarm_ap_ws/devel/share/libmavconn/cmake/libmavconnConfig-version.cmake
-/home/sanket/swarm_ap_ws/devel/.private/libmavconn/share/libmavconn/cmake/libmavconn-extras.cmake /home/sanket/swarm_ap_ws/devel/share/libmavconn/cmake/libmavconn-extras.cmake

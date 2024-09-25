@@ -139,7 +139,7 @@ RUN /bin/bash -c " cd ~/ardu_ws \
     && apt-get update \
     && rosdep update \
     && rosdep install --from-paths src --ignore-src -y  -r \
-    && colcon build --packages-up-to ardupilot_gz_bringup --cmake-args -DCMAKE_VERBOSE_MAKEFILE=ON --event-handlers console_direct+"
+    && colcon build --packages-up-to ardupilot_gz_bringup"
 
 # Source the workspace in .bashrc
 RUN echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc \
@@ -147,6 +147,15 @@ RUN echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc \
 
 # Set working directory
 WORKDIR /root/ardu_ws/
+
+#Hanlde graphical settings for gazebo
+RUN apt-get update && apt-get install -y \
+    libgl1-mesa-glx \
+    libgl1-mesa-dri \
+    libglu1-mesa \
+    x11-xserver-utils \
+    xauth \
+    && rm -rf /var/lib/apt/lists/*
 
 ENV DISPLAY=:0
 ENV QT_X11_NO_MITSHM=1
