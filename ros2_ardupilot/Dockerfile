@@ -92,6 +92,59 @@ RUN /bin/bash -c " cd ~/ardu_ws  \
     && colcon build --packages-up-to ardupilot_dds_tests"
 
 
+#Install Gazebo
+ENV GZ_VERSION=harmonic
+# Install Gazebo Harmonic and other necessary packages
+RUN apt-get update && apt-get install -y \
+    lsb-release wget gnupg \
+    && wget https://packages.osrfoundation.org/gazebo.gpg -O /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null \
+    && apt-get update \
+    && apt-get install -y \
+        gz-harmonic \
+        libgz-sim7-dev \
+        libgz-math7-dev \
+        libgz-transport12-dev \
+        libsdformat13-dev \
+        libgz-cmake3-dev \
+        libgz-plugin2-dev \
+        ros-humble-ros-gz \
+        ros-humble-ros-gz-bridge \
+        ros-humble-ros-gz-sim \
+        ros-humble-ros-gz-interfaces \
+        rapidjson-dev \
+        ros-humble-topic-tools \
+        ros-humble-ament-cmake-mypy \
+        ros-humble-ament-cmake-pclint \
+        ros-humble-ament-cmake-pycodestyle \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN cd ~/ardu_ws \
+    && vcs import --input https://raw.githubusercontent.com/ArduPilot/ardupilot_gz/main/ros2_gz.repos --recursive src
+
+RUN add-apt-repository universe \
+    && apt-get install -y python3-colcon-common-extensions \
+        libgstreamer1.0-dev \
+        libgstreamer-plugins-base1.0-dev \
+        gstreamer1.0-plugins-base \
+        gstreamer1.0-plugins-good \
+        gstreamer1.0-plugins-bad \
+        gstreamer1.0-plugins-ugly \
+        gstreamer1.0-libav \
+        gstreamer1.0-tools \
+        libzip-dev
+
+RUN /bin/bash -c " cd ~/ardu_ws \
+    && source /opt/ros/humble/setup.bash \
+    && apt-get update \
+    && rosdep update \
+    && rosdep install --from-paths src --ignore-src -y  -r \
+    && colcon build --packages-up-to ardupilot_gz_bringup --cmake-args -DCMAKE_VERBOSE_MAKEFILE=ON --event-handlers console_direct+"
+
+# Source the workspace in .bashrc
+RUN echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc \
+    && echo "source ~/ardu_ws/install/setup.bash" >> ~/.bashrc
+
 # Set working directory
 WORKDIR /root/ardu_ws/
 

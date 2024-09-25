@@ -55,6 +55,7 @@ Then we use the following to test everything is working correctly once inside th
 ```bash
 source /opt/ros/humble/setup.bash
 colcon build --packages-up-to ardupilot_dds_tests
+colcon test-result --all --verbose
 ```
 If all the tests pass, then the environment is set up correctly, and we are ready to start running the code. 
 
