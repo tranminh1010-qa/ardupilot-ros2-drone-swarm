@@ -154,11 +154,32 @@ RUN apt-get update && apt-get install -y \
     libgl1-mesa-dri \
     libglu1-mesa \
     x11-xserver-utils \
+    libosmesa6-dev \
     xauth \
     && rm -rf /var/lib/apt/lists/*
 
 ENV DISPLAY=:0
 ENV QT_X11_NO_MITSHM=1
+ENV LIBGL_ALWAYS_SOFTWARE=1
+ENV XDG_RUNTIME_DIR=/tmp/runtime-root
+ENV XAUTHORITY=/tmp/.docker.xauth
+ENV XDG_SESSION_TYPE=x11
+ENV XDG_DATA_DIRS=/usr/local/share:/usr/share:/var/lib/snapd/desktop
+ENV XDG_CONFIG_DIRS=/etc/xdg/xdg-ubuntu:/etc/xdg
+ENV XDG_CURRENT_DESKTOP=ubuntu:GNOME
+ENV XDG_SESSION_DESKTOP=ubuntu
+ENV XDG_SESSION_CLASS=user
+ENV XDG_SESSION_ID=1
+ENV XDG_SESSION_COOKIE=1
+ENV XDG_SEAT=seat0
+ENV XDG_VTNR=2
+ENV XDG_GREETER_DATA_DIR=/var/lib/lightdm-data/root
+ENV XDG_CONFIG_HOME=/root/.config
+ENV XDG_CACHE_HOME=/root/.cache
+ENV XDG_DATA_HOME=/root/.local/share
+
+RUN mkdir -p $XDG_RUNTIME_DIR && chmod 700 $XDG_RUNTIME_DIR
+
 
 # Change ENTRYPOINT to run a shell script
 COPY --chown=ardupilot:ardupilot entrypoint.sh /home/ardupilot/entrypoint.sh
