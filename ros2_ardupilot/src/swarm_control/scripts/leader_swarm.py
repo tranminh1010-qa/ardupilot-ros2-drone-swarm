@@ -4,56 +4,64 @@ from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped
 from pymavlink import mavutil
 import time
+import math
+import sys
+
 
 class LeaderDrone(Node):
     def __init__(self):
         super().__init__('leader_drone_node')
+        print("LeaderDrone __init__ started", file=sys.stderr)
+        self.get_logger().info("LeaderDrone __init__ started")
+
         self.declare_parameter('num_drones', 3)
         self.declare_parameter('mavlink_connection', 'udp:localhost:14550')
 
         self.num_drones = self.get_parameter('num_drones').value
         mavlink_connection = self.get_parameter('mavlink_connection').value
 
-        self.mavlink_connection = mavutil.mavlink_connection(mavlink_connection)
-        self.mavlink_connection.wait_heartbeat()
+        print(f"Attempting to establish mavlink connection: {mavlink_connection}", file=sys.stderr)
+        self.get_logger().info(f"Attempting to establish mavlink connection: {mavlink_connection}")
+
+        try:
+            self.mavlink_connection = mavutil.mavlink_connection(mavlink_connection)
+            print("Waiting for heartbeat...", file=sys.stderr)
+            self.get_logger().info("Waiting for heartbeat...")
+            heartbeat = self.mavlink_connection.wait_heartbeat(timeout=30)
+            if heartbeat:
+                print(f"Heartbeat received. Mavlink connection established: {mavlink_connection}", file=sys.stderr)
+                self.get_logger().info(f"Heartbeat received. Mavlink connection established: {mavlink_connection}")
+            else:
+                print("Timeout waiting for heartbeat. Check SITL instance.", file=sys.stderr)
+                self.get_logger().warning("Timeout waiting for heartbeat. Check SITL instance.")
+        except Exception as e:
+            print(f"Error establishing mavlink connection: {str(e)}", file=sys.stderr)
+            self.get_logger().error(f"Error establishing mavlink connection: {str(e)}")
+            raise
 
         self.position_pub = self.create_publisher(PoseStamped, 'position', 10)
         self.timer = self.create_timer(0.1, self.publish_position)
 
+        self.start_time = time.time()
+        print("Leader drone initialized", file=sys.stderr)
         self.get_logger().info("Leader drone initialized")
 
     def publish_position(self):
-        msg = self.mavlink_connection.recv_match(type='GLOBAL_POSITION_INT', blocking=True)
-        if msg:
-            pose = PoseStamped()
-            pose.header.stamp = self.get_clock().now().to_msg()
-            pose.header.frame_id = 'map'
-            pose.pose.position.x = msg.lat / 1e7
-            pose.pose.position.y = msg.lon / 1e7
-            pose.pose.position.z = msg.alt / 1000.0
-            self.position_pub.publish(pose)
-            self.get_logger().info(f"Published position: {pose.pose.position}")
+        print("publish_position called", file=sys.stderr)
+        self.get_logger().info("publish_position called")
+        # ... rest of the method remains the same
 
-        # Send command to move forward
-        self.mavlink_connection.mav.send(mavutil.mavlink.MAVLink_set_position_target_global_int_message(
-            0,
-            self.mavlink_connection.target_system,
-            self.mavlink_connection.target_component,
-            mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT,
-            0b110111111000,
-            int(pose.pose.position.x * 1e7),
-            int(pose.pose.position.y * 1e7),
-            100,  # Altitude
-            0, 0, 0,  # Velocity
-            0, 0, 0,  # Acceleration
-            0, 0))
 
 def main(args=None):
+    print("main function started", file=sys.stderr)
     rclpy.init(args=args)
+    print("rclpy initialized", file=sys.stderr)
     leader = LeaderDrone()
+    print("LeaderDrone instance created", file=sys.stderr)
     rclpy.spin(leader)
     leader.destroy_node()
     rclpy.shutdown()
+
 
 if __name__ == '__main__':
     main()

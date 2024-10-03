@@ -1,9 +1,8 @@
+import os
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription, ExecuteProcess, GroupAction, TimerAction
-from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.actions import ExecuteProcess, GroupAction, TimerAction, LogInfo
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
-import os
 
 def generate_launch_description():
     bringup_dir = get_package_share_directory('ardupilot_sitl_models')
@@ -25,9 +24,9 @@ def generate_launch_description():
                 '--custom-location=40.072842,-105.230575,1586,0',
                 '--speedup', '1',
                 '--instance', str(drone_id),
-                '--add-param-file=' + os.path.join(get_package_share_directory('swarm_control'), 'config', 'plane.parm'),
             ],
-            output='screen'
+            output='screen',
+            shell=True
         )
 
     def spawn_drone(drone_id, x, y, z):
@@ -70,7 +69,7 @@ def generate_launch_description():
             executable='follower_drone.py',
             name=f'follower_drone_node_{i}',
             parameters=[{
-                'mavlink_connection': f'udp:localhost:{14551 + i}',
+                'mavlink_connection': f'udp:localhost:{14560 + i * 10}',
                 'leader_pos_topic': '/leader_drone_node/position',
                 'offset': [5.0 * (i + 1), 0.0, 0.0]
             }],
