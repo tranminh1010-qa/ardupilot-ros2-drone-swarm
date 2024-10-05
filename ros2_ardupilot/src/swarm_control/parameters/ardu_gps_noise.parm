@@ -1,20 +1,21 @@
+# DDS UDP Param
+DDS_ENABLE 1
+DDS_UDP_PORT 2019
+
 # Arming and safety
 ARMING_CHECK 0
+EK3_ENABLE 1
 AFS_ENABLE 0
 BRD_SAFETY_DEFLT 0
+
+# Set RC failsafe to enable GUIDED mode
+FS_THR_ENABLE = 1
+FS_THR_VALUE = 910
+FS_OPTIONS = 1
 
 # GPS configuration
 GPS_TYPE 1
 GPS_AUTO_CONFIG 1
-
-# EKF configuration
-EK2_ENABLE 1
-EK3_ENABLE 0
-AHRS_EKF_TYPE 2
-
-# Compass configuration
-COMPASS_USE 1
-COMPASS_AUTO_ROT 2
 
 # RC configuration
 RC_OPTIONS 32
@@ -22,14 +23,6 @@ RC_OPTIONS 32
 # Frame configuration
 FRAME_CLASS 1
 FRAME_TYPE 1
-
-# Flight modes
-FLTMODE1 5
-FLTMODE2 5
-FLTMODE3 5
-FLTMODE4 5
-FLTMODE5 5
-FLTMODE6 5
 
 # SITL-specific settings
 SITL_GPS_TYPE 1

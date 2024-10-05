@@ -88,3 +88,19 @@ colcon build --packages-select swarm_control --symlink-install
 source install/setup.bash
 ros2 launch swarm_control swarm.launch.py
 ```
+
+
+### 7. Debug Potential Issue
+
+In case there is an issue creating a connection between the ros2 nodes and the ardupilot SIL, let's start by checking running processes
+```bash
+sudo lsof -i :5760 #Change the port depending on the situatuin
+sudo kill -9 <PID>  # Replace <PID> with the process ID from the lsof command
+```
+
+Now, we check if it is a permission issue. Close down all running operations, and run as a non root user
+```bash
+pkill -f arducopter
+pkill -f mavproxy
+. ~/.profile
+```

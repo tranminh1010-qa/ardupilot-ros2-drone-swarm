@@ -14,7 +14,7 @@ def generate_launch_description():
         bringup_dir = get_package_share_directory('ardupilot_gazebo')
         sdf_path = os.path.join(bringup_dir, 'models', 'iris_with_standoffs', 'model.sdf')
         swarm_control_share = get_package_share_directory('swarm_control')
-        param_file = os.path.join(swarm_control_share, 'parameters', 'ardu_gps_noise.param')
+        param_file = os.path.join(swarm_control_share, 'parameters', 'ardu_gps_noise.parm')
 
         if not os.path.exists(sdf_path):
             raise FileNotFoundError(f"SDF file not found: {sdf_path}")
@@ -183,7 +183,7 @@ def generate_launch_description():
             TimerAction(period=35.0, actions=[spawn_leader, spawn_follower1, spawn_follower2]),
             TimerAction(period=40.0, actions=[bridge]),
             LogInfo(msg="Starting ROS nodes..."),
-            TimerAction(period=180.0, actions=[leader_node, follower_node1, follower_node2])
+            TimerAction(period=60.0, actions=[leader_node, follower_node1, follower_node2])
         ])
     except Exception as e:
         print(f"Error in launch file: {str(e)}")
