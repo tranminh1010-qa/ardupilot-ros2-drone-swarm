@@ -24,12 +24,16 @@ include_directories(
 install(PROGRAMS
   scripts/leader_swarm.py
   scripts/follower_drone.py
+  scripts/drone_control_node.py
+  scripts/mavlink_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
 # Install launch files
 install(DIRECTORY
   launch
+  parameters
+  models
   DESTINATION share/${PROJECT_NAME}
 )
 

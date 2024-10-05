@@ -1,70 +1,155 @@
 #!/usr/bin/env python3
-import time
-import pymavlink.mavutil as mavutil
 import rclpy
 from rclpy.node import Node
+from geometry_msgs.msg import PoseStamped
+from pymavlink import mavutil
+import sys
+import time
 
-class LeaderDrone:
+
+class FollowerDrone(Node):
     def __init__(self):
-        # Create a MAVLink connection for each drone
-        self.master1 = mavutil.mavlink_connection('udp:localhost:14550')  # Leader
-        self.master2 = mavutil.mavlink_connection('udp:localhost:14560')  # Follower 1
-        self.master3 = mavutil.mavlink_connection('udp:localhost:14570')  # Follower 2
+        super().__init__('follower_drone_node')
+        self.get_logger().info("FollowerDrone __init__ started")
 
-        # Define offsets for follower drones
-        self.follower_offset_x2 = -2.0  # 2 meters behind the leader for drone 2
-        self.follower_offset_x3 = -4.0  # 4 meters behind the leader for drone 3
+        self.declare_parameter('mavlink_connection', 'udp:localhost:14551')
+        self.declare_parameter('leader_pos_topic', '/leader_drone_node/position')
+        self.declare_parameter('offset', [1.0, 0.0, 0.0])
 
-        # Wait for heartbeats from all drones
-        self.wait_for_heartbeat(self.master1)
-        self.wait_for_heartbeat(self.master2)
-        self.wait_for_heartbeat(self.master3)
+        self.mavlink_connection = self.get_parameter('mavlink_connection').value
+        self.leader_pos_topic = self.get_parameter('leader_pos_topic').value
+        self.offset = self.get_parameter('offset').value
 
-        # Arm and set to GUIDED mode
-        self.arm_and_set_guided(self.master1)
-        self.arm_and_set_guided(self.master2)
-        self.arm_and_set_guided(self.master3)
+        self.get_logger().info(f"Attempting to establish mavlink connection: {self.mavlink_connection}")
 
-    def wait_for_heartbeat(self, master):
-        print(f"Waiting for heartbeat from {master.address}")
-        master.wait_heartbeat()
-        print(f"Heartbeat received from {master.address}")
+        self.mav_connection = None
+        self.connect_timer = self.create_timer(5.0, self.attempt_connect)
 
-    def arm_and_set_guided(self, master):
-        # Set mode to GUIDED and arm the drone
-        while not master.wait_heartbeat().base_mode & mavutil.mavlink.MAV_MODE_FLAG_GUIDED_ENABLED:
-            master.mav.set_mode_send(
-                master.target_system,
-                mavutil.mavlink.MAV_MODE_FLAG_GUIDED_ENABLED,
-                mavutil.mavlink.MAV_MODE_GUIDED
-            )
+        self.create_subscription(PoseStamped, self.leader_pos_topic, self.leader_position_callback, 10)
+
+        self.get_logger().info("Follower drone initialized")
+
+    def attempt_connect(self):
+        if self.mav_connection is None or not self.mav_connection.target_system:
+            try:
+                self.get_logger().info(f"Attempting to connect to {self.mavlink_connection}")
+                self.mav_connection = mavutil.mavlink_connection(self.mavlink_connection, source_system=2, timeout=60)
+                self.get_logger().info(f"Connection established: {self.mavlink_connection}")
+                self.get_logger().info("Waiting for heartbeat...")
+                self.mav_connection.wait_heartbeat(timeout=10)
+                self.get_logger().info("Heartbeat received!")
+                self.connect_timer.cancel()
+                self.pre_arm_routine()
+                if not self.set_guided_mode():
+                    self.force_guided_mode()
+                if not self.arm_drone():
+                    self.force_arm()
+            except Exception as e:
+                self.get_logger().error(f"Error establishing mavlink connection: {str(e)}")
+
+    def pre_arm_routine(self):
+        self.mav_connection.mav.heartbeat_send(
+            mavutil.mavlink.MAV_TYPE_GCS,
+            mavutil.mavlink.MAV_AUTOPILOT_INVALID,
+            0, 0, 0)
+        time.sleep(1)
+        self.mav_connection.mav.request_data_stream_send(
+            self.mav_connection.target_system,
+            self.mav_connection.target_component,
+            mavutil.mavlink.MAV_DATA_STREAM_ALL,
+            1,  # 1 Hz
+            1   # start
+        )
+        time.sleep(2)
+
+    def set_guided_mode(self):
+        for i in range(10):  # Increase attempts to 10
+            self.mav_connection.set_mode('GUIDED')
+            time.sleep(2)  # Increase delay to 2 seconds
+            mode = self.mav_connection.flightmode
+            self.get_logger().info(f"Attempt {i+1}: Current flight mode: {mode}")
+            if mode == 'GUIDED':
+                self.get_logger().info(f"Successfully set GUIDED mode")
+                return True
+            time.sleep(3)  # Add an additional delay between attempts
+        self.get_logger().error(f"Failed to set GUIDED mode")
+        return False
+
+    def force_guided_mode(self):
+        self.mav_connection.mav.command_long_send(
+            self.mav_connection.target_system,
+            self.mav_connection.target_component,
+            mavutil.mavlink.MAV_CMD_DO_SET_MODE, 0,
+            mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
+            4, 0, 0, 0, 0, 0)  # 4 is the mode number for GUIDED in ArduCopter
+        self.get_logger().info(f"Forced GUIDED mode command sent")
+
+    def arm_drone(self):
+        self.mav_connection.arducopter_arm()
+        self.get_logger().info("Attempting to arm drone")
+        for i in range(10):
+            if self.mav_connection.motors_armed():
+                self.get_logger().info("Drone armed successfully.")
+                return True
             time.sleep(1)
+        self.get_logger().error("Failed to arm drone")
+        return False
 
-        # Arm the drone
-        while not master.wait_heartbeat().system_status == mavutil.mavlink.MAV_STATE_ACTIVE:
-            master.arducopter_arm()
-            time.sleep(1)
+    def force_arm(self):
+        self.mav_connection.mav.command_long_send(
+            self.mav_connection.target_system,
+            self.mav_connection.target_component,
+            mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM,
+            0, 1, 21196, 0, 0, 0, 0, 0)
+        self.get_logger().info("Force arm command sent")
 
-        print(f"Drone {master.target_system} armed and set to GUIDED mode.")
+    def leader_position_callback(self, msg):
+        self.get_logger().debug("leader_position_callback called")
 
-    # ... (rest of the code remains the same)
+        target_x = msg.pose.position.x + self.offset[0]
+        target_y = msg.pose.position.y + self.offset[1]
+        target_z = msg.pose.position.z + self.offset[2]
+
+        self.get_logger().info(f"Following leader at offset: {target_x}, {target_y}, {target_z}")
+
+        if self.mav_connection and self.mav_connection.target_system:
+            try:
+                self.mav_connection.mav.send(mavutil.mavlink.MAVLink_set_position_target_global_int_message(
+                    0,
+                    self.mav_connection.target_system,
+                    self.mav_connection.target_component,
+                    mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT,
+                    0b110111111000,
+                    int(target_x * 1e7),
+                    int(target_y * 1e7),
+                    int(target_z * 1000),
+                    0, 0, 0,  # Velocity
+                    0, 0, 0,  # Acceleration
+                    0, 0))
+            except Exception as e:
+                self.get_logger().error(f"Error sending MAVLink message: {str(e)}")
+        else:
+            self.get_logger().warning("MAVLink connection not established. Cannot send command.")
+
+    def shutdown(self):
+        if self.mav_connection and self.mav_connection.target_system:
+            self.mav_connection.mav.command_long_send(
+                self.mav_connection.target_system,
+                self.mav_connection.target_component,
+                mavutil.mavlink.MAV_CMD_NAV_LAND, 0, 0, 0, 0, 0, 0, 0, 0)
+            self.get_logger().info("Landing command sent to follower drone")
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    follower = FollowerDrone()
+    try:
+        rclpy.spin(follower)
+    finally:
+        follower.shutdown()
+        follower.destroy_node()
+        rclpy.shutdown()
+
 
 if __name__ == '__main__':
-    rclpy.init()
-    leader_drone = LeaderDrone()
-
-    # Takeoff to 5 meters
-    leader_drone.takeoff(5)
-
-    # Move the leader to different positions, followers will follow
-    time.sleep(10)
-    leader_drone.move_leader(47.397742, 8.545594, 5)  # Sample GPS coordinates
-    time.sleep(10)
-    leader_drone.move_leader(47.397642, 8.545494, 5)
-    time.sleep(10)
-    leader_drone.move_leader(47.397842, 8.545794, 5)
-
-    # Start the following sequence
-    leader_drone.follow_leader()
-    rclpy.spin(leader_drone)
-    rclpy.shutdown()
+    main()

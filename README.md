@@ -33,6 +33,7 @@ docker run -it --net=host \
   --name="ardupilot-ros2" \
   --env="DISPLAY" \
   --env="QT_X11_NO_MITSHM=1" \
+  --device=/dev/dri:/dev/dri \
   --volume="/tmp/.X11-unix:/tmp/.X11-unix:rw" \
   --volume="$HOME/.Xauthority:/root/.Xauthority:rw" \
   --volume="$(pwd)/src/swarm_control:/root/ardu_ws/src/swarm_control" \
@@ -62,7 +63,7 @@ If all the tests pass, then the environment is set up correctly, and we are read
 We can also make sure that Ardupilot is working correctly with ROS2. We can do so by running the following.
 For more information refer to [ardupilot/Tools/ros2/README.md](https://github.com/ArduPilot/ardupilot/tree/master/Tools/ros2#readme). There you can find examples of launches using serial connection instead of udp, as well as a step-by-step breakdown of what the launch files are doing.
 ```bash
-ros2 launch ardupilot_sitl sitl_dds_udp.launch.py transport:=udp4 synthetic_clock:=True wipe:=False model:=quad speedup:=1 slave:=0 instance:=0 defaults:=$(ros2 pkg prefix ardupilot_sitl)/share/ardupilot_sitl/config/default_params/copter.parm,$(ros2 pkg prefix ardupilot_sitl)/share/ardupilot_sitl/config/default_params/dds_udp.parm sim_address:=127.0.0.1 master:=tcp:127.0.0.1:5760 sitl:=127.0.0.1:5501```
+ros2 launch ardupilot_sitl sitl_dds_udp.launch.py transport:=udp4 synthetic_clock:=True wipe:=False model:=quad speedup:=1 slave:=0 instance:=0 defaults:=$(ros2 pkg prefix ardupilot_sitl)/share/ardupilot_sitl/config/default_params/copter.parm,$(ros2 pkg prefix ardupilot_sitl)/share/ardupilot_sitl/config/default_params/dds_udp.parm sim_address:=127.0.0.1 master:=tcp:127.0.0.1:5760 sitl:=127.0.0.1:5501
 ```
 
 In a separate terminal, run the following to see the list of publishers
@@ -82,6 +83,7 @@ ros2 launch ardupilot_gz_bringup iris_runway.launch.py
 To run the code, we need to first build the workspace. This is done by running the following in the container.
 ```bash
 cd ~/ardu_ws
+.~/.profile
 colcon build --packages-select swarm_control --symlink-install
 source install/setup.bash
 ros2 launch swarm_control swarm.launch.py
