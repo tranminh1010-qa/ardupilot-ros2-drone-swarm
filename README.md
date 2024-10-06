@@ -37,6 +37,7 @@ docker run -it --net=host \
   --volume="/tmp/.X11-unix:/tmp/.X11-unix:rw" \
   --volume="$HOME/.Xauthority:/root/.Xauthority:rw" \
   --volume="$(pwd)/src/swarm_control:/root/ardu_ws/src/swarm_control" \
+  --volume="$(pwd)/src/custom_gz:/root/ardu_ws/src/custom_gz" \
   ardupilot-ros2
 ```
 The terminal should hang, to continue, open a new terminal and keep working. 
@@ -68,7 +69,7 @@ ros2 launch ardupilot_sitl sitl_dds_udp.launch.py transport:=udp4 synthetic_cloc
 
 In a separate terminal, run the following to see the list of publishers
 ```bash
-docker container exec -it ardupilot-ros23 /bin/bash
+docker container exec -it ardupilot-ros2 /bin/bash
 source ~/ardu_ws/install/setup.bash
 ros2 -t topic list
 ```
@@ -83,7 +84,7 @@ ros2 launch ardupilot_gz_bringup iris_runway.launch.py
 To run the code, we need to first build the workspace. This is done by running the following in the container.
 ```bash
 cd ~/ardu_ws
-.~/.profile
+. ~/.profile
 colcon build --packages-select swarm_control --symlink-install
 source install/setup.bash
 ros2 launch swarm_control swarm.launch.py

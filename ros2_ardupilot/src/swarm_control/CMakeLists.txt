@@ -33,7 +33,6 @@ install(PROGRAMS
 install(DIRECTORY
   launch
   parameters
-  models
   DESTINATION share/${PROJECT_NAME}
 )
 

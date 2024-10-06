@@ -82,6 +82,25 @@ class FollowerDrone(Node):
         )
         time.sleep(2)
 
+        # Add gyro calibration
+        self.get_logger().info("Starting gyro calibration")
+        self.mav_connection.mav.command_long_send(
+            self.mav_connection.target_system,
+            self.mav_connection.target_component,
+            mavutil.mavlink.MAV_CMD_PREFLIGHT_CALIBRATION,
+            0, 1, 0, 0, 0, 0, 0, 0)
+
+        # Wait for gyro calibration to complete
+        start_time = time.time()
+        while time.time() - start_time < 30:  # Wait up to 30 seconds
+            msg = self.mav_connection.recv_match(type='COMMAND_ACK', blocking=True, timeout=1)
+            if msg and msg.command == mavutil.mavlink.MAV_CMD_PREFLIGHT_CALIBRATION:
+                if msg.result == mavutil.mavlink.MAV_RESULT_ACCEPTED:
+                    self.get_logger().info("Gyro calibration completed successfully")
+                    break
+        else:
+            self.get_logger().error("Gyro calibration timed out")
+
         # Set EKF home
         self.mav_connection.mav.command_long_send(
             self.mav_connection.target_system,
@@ -111,54 +130,54 @@ class FollowerDrone(Node):
         self.get_logger().info("Pre-arm routine completed")
 
     def set_guided_mode(self):
-        for i in range(10):  # Increase attempts to 10
-            self.mav_connection.mav.command_long_send(
-                self.mav_connection.target_system,
-                self.mav_connection.target_component,
-                mavutil.mavlink.MAV_CMD_DO_SET_MODE,
-                0,
-                mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
-                4,  # 4 is GUIDED mode for ArduCopter
-                0, 0, 0, 0, 0)
-
-            # Wait for mode change acknowledgement
-            start = time.time()
-            while time.time() - start < 5:  # 5 seconds timeout
-                msg = self.mav_connection.recv_match(type='COMMAND_ACK', blocking=True, timeout=1)
-                if msg and msg.command == mavutil.mavlink.MAV_CMD_DO_SET_MODE:
-                    if msg.result == mavutil.mavlink.MAV_RESULT_ACCEPTED:
-                        self.get_logger().info(f"Successfully set GUIDED mode")
-                        return True
-                    else:
-                        break  # Go to next attempt if not accepted
-
-            self.get_logger().info(f"Attempt {i + 1}: Failed to set GUIDED mode. Retrying...")
-            time.sleep(1)
-
-        self.get_logger().error(f"Failed to set GUIDED mode after 10 attempts")
-        return False
-
-    def arm_drone(self):
-        self.mav_connection.arducopter_arm()
-        self.get_logger().info("Attempting to arm drone")
         self.mav_connection.mav.command_long_send(
             self.mav_connection.target_system,
             self.mav_connection.target_component,
-            mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM,
-            0, 1, 0, 0, 0, 0, 0, 0)
+            mavutil.mavlink.MAV_CMD_DO_SET_MODE,
+            0,
+            mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
+            4,  # 4 is GUIDED mode for ArduCopter
+            0, 0, 0, 0, 0)
+        self.get_logger().info("Set GUIDED mode command sent")
 
+        # Wait for mode change acknowledgement
         start = time.time()
-        while time.time() - start < 30:
-            msg = self.mav_connection.recv_match(type='COMMAND_ACK', blocking=True, timeout=5)
-            if msg and msg.command == mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM:
+        while time.time() - start < 10:
+            msg = self.mav_connection.recv_match(type='COMMAND_ACK', blocking=True, timeout=1)
+            if msg and msg.command == mavutil.mavlink.MAV_CMD_DO_SET_MODE:
                 if msg.result == mavutil.mavlink.MAV_RESULT_ACCEPTED:
-                    self.get_logger().info("Drone armed successfully.")
+                    self.get_logger().info("GUIDED mode set successfully")
                     return True
-                else:
-                    self.get_logger().error(f"Arming failed with result: {msg.result}")
-                    return False
+        self.get_logger().error("Failed to set GUIDED mode")
+        return False
 
-        self.get_logger().error("Arming timed out")
+    def arm_drone(self):
+        self.get_logger().info("Attempting to arm drone")
+        for attempt in range(3):  # Try 3 times
+            self.mav_connection.mav.command_long_send(
+                self.mav_connection.target_system,
+                self.mav_connection.target_component,
+                mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM,
+                0, 1, 0, 0, 0, 0, 0, 0)
+
+            start = time.time()
+            while time.time() - start < 10:
+                msg = self.mav_connection.recv_match(type=['COMMAND_ACK', 'STATUSTEXT'], blocking=True, timeout=1)
+                if msg is not None:
+                    if msg.get_type() == 'COMMAND_ACK' and msg.command == mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM:
+                        if msg.result == mavutil.mavlink.MAV_RESULT_ACCEPTED:
+                            self.get_logger().info("Drone armed successfully.")
+                            return True
+                        else:
+                            self.get_logger().error(f"Arming failed with result: {msg.result}")
+                            break
+                    elif msg.get_type() == 'STATUSTEXT':
+                        self.get_logger().info(f"Status: {msg.text}")
+
+            self.get_logger().warn(f"Arming attempt {attempt + 1} failed. Waiting before retry...")
+            time.sleep(5)  # Wait 5 seconds before next attempt
+
+        self.get_logger().error("Arming failed after multiple attempts")
         return False
 
     def takeoff(self, altitude):
