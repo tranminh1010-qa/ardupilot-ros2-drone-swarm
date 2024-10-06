@@ -21,6 +21,17 @@ class LeaderDrone(Node):
         self.position_publisher = self.create_publisher(PoseStamped, '/leader_drone_node/position', 10)
         self.position_timer = self.create_timer(1.0, self.publish_position)
         self.takeoff_complete_publisher = self.create_publisher(Bool, '/leader_takeoff_complete', 10)
+        self.waypoints = [
+            (10, 0, 10),
+            (10, 10, 10),
+            (0, 10, 10),
+            (-10, 10, 10),
+            (-10, -10, 10),
+            (10, -10, 10),
+            (10, 0, 20),
+            (0, 0, 20),
+            (0, 0, 10)
+        ]
 
     def attempt_connect(self):
         if self.mav_connection is None or not self.mav_connection.target_system:
@@ -122,21 +133,16 @@ class LeaderDrone(Node):
         return False
 
     def start_mission(self):
-        # Example: Move in a square pattern
-        waypoints = [
-            (10, 0, 10),
-            (10, 10, 10),
-            (0, 10, 10),
-            (0, 0, 10)
-        ]
-        for wp in waypoints:
-            self.get_logger().info(f"Moving to waypoint: {wp}")
+        self.get_logger().info("Starting mission")
+        for i, wp in enumerate(self.waypoints):
+            self.get_logger().info(f"Moving to waypoint {i + 1}: {wp}")
             if self.goto_position(*wp):
-                self.get_logger().info(f"Reached waypoint {wp}")
-                time.sleep(5)  # Hover for 5 seconds at each waypoint
+                self.get_logger().info(f"Reached waypoint {i + 1}: {wp}")
+                time.sleep(2)  # Reduced hover time to 2 seconds
             else:
-                self.get_logger().error(f"Failed to reach waypoint {wp}")
+                self.get_logger().error(f"Failed to reach waypoint {i + 1}: {wp}")
                 break
+        self.get_logger().info("Mission completed")
 
     def goto_position(self, x, y, z):
         self.get_logger().info(f"Sending goto command: x={x}, y={y}, z={z}")
@@ -154,7 +160,7 @@ class LeaderDrone(Node):
         # Wait for reaching the position
         start = time.time()
         while time.time() - start < 60:
-            msg = self.mav_connection.recv_match(type='LOCAL_POSITION_NED', blocking=True, timeout=5)
+            msg = self.mav_connection.recv_match(type='LOCAL_POSITION_NED', blocking=True, timeout=1)
             if msg:
                 current_pos = (msg.x, msg.y, -msg.z)
                 self.get_logger().info(
@@ -162,11 +168,11 @@ class LeaderDrone(Node):
                 if self.is_position_reached(current_pos, (x, y, z)):
                     self.get_logger().info(f"Reached position: x={x}, y={y}, z={z}")
                     return True
-            time.sleep(1)  # Check every second
+            time.sleep(3)  # Check every second
         self.get_logger().error(f"Failed to reach position: x={x}, y={y}, z={z}")
         return False
 
-    def is_position_reached(self, current_pos, target_pos, tolerance=0.5):
+    def is_position_reached(self, current_pos, target_pos, tolerance=0.3):
         return all(abs(c - t) < tolerance for c, t in zip(current_pos, target_pos))
 
     def publish_position(self):

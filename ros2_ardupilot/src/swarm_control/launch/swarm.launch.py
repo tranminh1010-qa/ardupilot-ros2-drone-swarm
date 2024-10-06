@@ -144,7 +144,8 @@ def generate_launch_description():
             parameters=[{
                 'mavlink_connection': 'udp:localhost:14560',
                 'leader_pos_topic': '/leader_drone_node/position',
-                'offset': [-2.0, 0.0, 0.0]
+                'offset': [-2.0, 0.0, 0.0],
+                'follow_distance': 2.0
             }]
         )
 
@@ -156,7 +157,9 @@ def generate_launch_description():
             parameters=[{
                 'mavlink_connection': 'udp:localhost:14570',
                 'leader_pos_topic': '/leader_drone_node/position',
-                'offset': [-4.0, 0.0, 0.0]
+                'offset': [-4.0, 0.0, 0.0],
+                'follow_distance': 4.0
+
             }]
         )
 

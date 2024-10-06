@@ -39,12 +39,42 @@ class FollowerDrone(Node):
         self.get_logger().info(f"Follower drone {self.drone_id} initialized")
         self.leader_takeoff_complete = False
         self.create_subscription(Bool, '/leader_takeoff_complete', self.leader_takeoff_callback, 10)
+        self.declare_parameter('follow_distance', 2.0)
+        self.follow_distance = self.get_parameter('follow_distance').value
 
     def leader_takeoff_callback(self, msg):
         self.leader_takeoff_complete = msg.data
         if self.leader_takeoff_complete:
             self.get_logger().info("Leader takeoff complete, initiating follower takeoff sequence")
             self.initiate_takeoff_sequence()
+
+    def leader_position_callback(self, msg):
+        if not self.mav_connection or not self.mav_connection.motors_armed():
+            self.get_logger().warn(
+                f"Drone {self.drone_id}: Not armed or connection not established. Cannot follow leader.")
+            return
+
+        self.get_logger().debug(f"Drone {self.drone_id}: leader_position_callback called")
+
+        # Calculate target position based on leader's position and follow distance
+        direction = (self.offset[0], self.offset[1], self.offset[2])
+        magnitude = sum(x ** 2 for x in direction) ** 0.5
+        unit_direction = tuple(x / magnitude for x in direction)
+
+        target_x = msg.pose.position.x + unit_direction[0] * self.follow_distance
+        target_y = msg.pose.position.y + unit_direction[1] * self.follow_distance
+        target_z = msg.pose.position.z + unit_direction[2] * self.follow_distance
+
+        self.get_logger().info(
+            f"Drone {self.drone_id}: Following leader at position: {target_x:.2f}, {target_y:.2f}, {target_z:.2f}")
+
+        try:
+            self.mav_connection.mav.send(mavutil.mavlink.MAVLink_set_position_target_local_ned_message(
+                10, self.mav_connection.target_system, self.mav_connection.target_component,
+                mavutil.mavlink.MAV_FRAME_LOCAL_NED, 0b0000111111000111,
+                target_x, target_y, -target_z, 0, 0, 0, 0, 0, 0, 0, 0))
+        except Exception as e:
+            self.get_logger().error(f"Drone {self.drone_id}: Error sending MAVLink message: {str(e)}")
 
     def attempt_connect(self):
         if self.mav_connection is None or not self.mav_connection.target_system:
@@ -57,13 +87,6 @@ class FollowerDrone(Node):
                 self.get_logger().info(f"Drone {self.drone_id}: Heartbeat received!")
                 self.connect_timer.cancel()
                 self.pre_arm_routine()
-                if self.set_guided_mode():
-                    if self.arm_drone():
-                        self.get_logger().info(f"Drone {self.drone_id}: Armed successfully")
-                    else:
-                        self.get_logger().error(f"Drone {self.drone_id}: Arming failed")
-                else:
-                    self.get_logger().error(f"Drone {self.drone_id}: Failed to set GUIDED mode, skipping arming")
             except Exception as e:
                 self.get_logger().error(f"Drone {self.drone_id}: Error in connection process: {str(e)}")
 
