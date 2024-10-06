@@ -4,6 +4,7 @@ from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped
 from pymavlink import mavutil
 import time
+from std_msgs.msg import Bool
 
 
 class LeaderDrone(Node):
@@ -19,6 +20,7 @@ class LeaderDrone(Node):
 
         self.position_publisher = self.create_publisher(PoseStamped, '/leader_drone_node/position', 10)
         self.position_timer = self.create_timer(1.0, self.publish_position)
+        self.takeoff_complete_publisher = self.create_publisher(Bool, '/leader_takeoff_complete', 10)
 
     def attempt_connect(self):
         if self.mav_connection is None or not self.mav_connection.target_system:
@@ -112,6 +114,9 @@ class LeaderDrone(Node):
             msg = self.mav_connection.recv_match(type='GLOBAL_POSITION_INT', blocking=True, timeout=5)
             if msg and (msg.relative_alt / 1000.0) >= altitude * 0.95:
                 self.get_logger().info("Takeoff successful")
+                takeoff_msg = Bool()
+                takeoff_msg.data = True
+                self.takeoff_complete_publisher.publish(takeoff_msg)
                 return True
         self.get_logger().error("Takeoff failed")
         return False

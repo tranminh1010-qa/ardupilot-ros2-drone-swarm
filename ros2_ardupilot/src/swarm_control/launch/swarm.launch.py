@@ -19,10 +19,10 @@ def generate_launch_description():
         if not os.path.exists(sdf_path):
             raise FileNotFoundError(f"SDF file not found: {sdf_path}")
 
-        # if not os.path.exists(param_file):
-        #     raise FileNotFoundError(f"Parameter file not found: {param_file}")
+        if not os.path.exists(param_file):
+             raise FileNotFoundError(f"Parameter file not found: {param_file}")
 
-        # print(f"Using parameter file: {param_file}")
+        print(f"Using parameter file: {param_file}")
 
         # Launch Gazebo
         gz_sim = ExecuteProcess(
@@ -66,7 +66,7 @@ def generate_launch_description():
                 '--custom-location=40.072842,-105.230575,1586,0',
                 '--out=udp:127.0.0.1:14560',
                 '--out=udp:127.0.0.1:14561',
-                # '--add-param-file', param_file,
+                '--add-param-file', param_file,
             ],
             output='screen',
             shell=True,
@@ -89,7 +89,7 @@ def generate_launch_description():
                 '--custom-location=40.072842,-105.230575,1586,0',
                 '--out=udp:localhost:14570',
                 '--out=udp:localhost:14571',
-                # '--add-param-file', param_file,
+                '--add-param-file', param_file,
             ],
             output='screen',
             shell=True,
@@ -164,12 +164,12 @@ def generate_launch_description():
             gz_sim,
             LogInfo(msg="Starting SITL instances..."),
             TimerAction(period=5.0, actions=[ardupilot_sitl_leader]),
-            TimerAction(period=7.0, actions=[ardupilot_sitl_follower1]),
-            TimerAction(period=10.0, actions=[ardupilot_sitl_follower2]),
+            TimerAction(period=10.0, actions=[ardupilot_sitl_follower1]),
+            TimerAction(period=15.0, actions=[ardupilot_sitl_follower2]),
             LogInfo(msg="Spawning drones in Gazebo..."),
-            TimerAction(period=12.0, actions=[bridge]),
+            TimerAction(period=20.0, actions=[bridge]),
             LogInfo(msg="Starting ROS nodes..."),
-            TimerAction(period=15.0, actions=[leader_node, follower_node1, follower_node2])
+            TimerAction(period=25.0, actions=[leader_node, follower_node1, follower_node2])
         ])
     except Exception as e:
         print(f"Error in launch file: {str(e)}")

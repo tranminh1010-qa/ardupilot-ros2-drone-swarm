@@ -5,6 +5,7 @@ from geometry_msgs.msg import PoseStamped
 from pymavlink import mavutil
 import sys
 import time
+from std_msgs.msg import Bool
 
 
 class FollowerDrone(Node):
@@ -31,12 +32,19 @@ class FollowerDrone(Node):
         self.get_logger().info(f"Attempting to establish mavlink connection: {self.mavlink_connection}")
 
         self.mav_connection = None
+        self.create_timer(10.0, self.check_connection)
         self.connect_timer = self.create_timer(5.0, self.attempt_connect)
-
         self.create_subscription(PoseStamped, self.leader_pos_topic, self.leader_position_callback, 10)
         self.create_timer(5.0, self.check_armed_status)
-
         self.get_logger().info(f"Follower drone {self.drone_id} initialized")
+        self.leader_takeoff_complete = False
+        self.create_subscription(Bool, '/leader_takeoff_complete', self.leader_takeoff_callback, 10)
+
+    def leader_takeoff_callback(self, msg):
+        self.leader_takeoff_complete = msg.data
+        if self.leader_takeoff_complete:
+            self.get_logger().info("Leader takeoff complete, initiating follower takeoff sequence")
+            self.initiate_takeoff_sequence()
 
     def attempt_connect(self):
         if self.mav_connection is None or not self.mav_connection.target_system:
@@ -52,10 +60,6 @@ class FollowerDrone(Node):
                 if self.set_guided_mode():
                     if self.arm_drone():
                         self.get_logger().info(f"Drone {self.drone_id}: Armed successfully")
-                        if self.takeoff(10):
-                            self.get_logger().info(f"Drone {self.drone_id}: Takeoff successful")
-                        else:
-                            self.get_logger().error(f"Drone {self.drone_id}: Takeoff failed")
                     else:
                         self.get_logger().error(f"Drone {self.drone_id}: Arming failed")
                 else:
@@ -63,6 +67,10 @@ class FollowerDrone(Node):
             except Exception as e:
                 self.get_logger().error(f"Drone {self.drone_id}: Error in connection process: {str(e)}")
 
+    def check_connection(self):
+        if self.mav_connection is None or not self.mav_connection.target_system:
+            self.get_logger().warn(f"Drone {self.drone_id}: Lost MAVLink connection. Attempting to reconnect...")
+            self.attempt_connect()
 
     def pre_arm_routine(self):
         self.get_logger().info("Starting pre-arm routine")
@@ -128,6 +136,19 @@ class FollowerDrone(Node):
         time.sleep(2)
 
         self.get_logger().info("Pre-arm routine completed")
+
+    def initiate_takeoff_sequence(self):
+        if self.set_guided_mode():
+            if self.arm_drone():
+                self.get_logger().info(f"Drone {self.drone_id}: Armed successfully")
+                if self.takeoff(10):
+                    self.get_logger().info(f"Drone {self.drone_id}: Takeoff successful")
+                else:
+                    self.get_logger().error(f"Drone {self.drone_id}: Takeoff failed")
+            else:
+                self.get_logger().error(f"Drone {self.drone_id}: Arming failed")
+        else:
+            self.get_logger().error(f"Drone {self.drone_id}: Failed to set GUIDED mode, skipping arming")
 
     def set_guided_mode(self):
         self.mav_connection.mav.command_long_send(
