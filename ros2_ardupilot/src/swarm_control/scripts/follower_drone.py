@@ -5,6 +5,7 @@ from geometry_msgs.msg import PoseStamped
 from pymavlink import mavutil
 import sys
 import time
+import csv
 from std_msgs.msg import Bool
 
 
@@ -41,6 +42,21 @@ class FollowerDrone(Node):
         self.create_subscription(Bool, '/leader_takeoff_complete', self.leader_takeoff_callback, 10)
         self.declare_parameter('follow_distance', 2.0)
         self.follow_distance = self.get_parameter('follow_distance').value
+
+        if self.drone_id == 1: 
+            self.csv_file = open('/root/ardu_ws/src/swarm_control/imu_log/imu_data_follower1.csv', mode='a') 
+            self.csv_writer = csv.writer(self.csv_file)
+            self.csv_writer.writerow(["Follower 1"])
+            self.csv_writer.writerow(["Time", "Orientation X", "Orientation Y", "Orientation Z",
+                                    "Angular Velocity X", "Angular Velocity Y", "Angular Velocity Z",
+                                    "Linear Acceleration X", "Linear Acceleration Y", "Linear Acceleration Z"])
+        if self.drone_id == 2: 
+            self.csv_file = open('/root/ardu_ws/src/swarm_control/imu_log/imu_data_follower2.csv', mode='a') 
+            self.csv_writer = csv.writer(self.csv_file)
+            self.csv_writer.writerow(["Follower 2"])
+            self.csv_writer.writerow(["Time", "Orientation X", "Orientation Y", "Orientation Z",
+                                    "Angular Velocity X", "Angular Velocity Y", "Angular Velocity Z",
+                                    "Linear Acceleration X", "Linear Acceleration Y", "Linear Acceleration Z"])
 
     def leader_takeoff_callback(self, msg):
         self.leader_takeoff_complete = msg.data
@@ -87,6 +103,7 @@ class FollowerDrone(Node):
                 self.get_logger().info(f"Drone {self.drone_id}: Heartbeat received!")
                 self.connect_timer.cancel()
                 self.pre_arm_routine()
+                self.imu_timer = self.create_timer(1.0, self.imu_values)
             except Exception as e:
                 self.get_logger().error(f"Drone {self.drone_id}: Error in connection process: {str(e)}")
 
@@ -278,6 +295,27 @@ class FollowerDrone(Node):
                 self.mav_connection.target_component,
                 mavutil.mavlink.MAV_CMD_NAV_LAND, 0, 0, 0, 0, 0, 0, 0, 0)
             self.get_logger().info("Landing command sent to follower drone")
+    
+    def imu_values(self):
+        while self.arm_drone():
+            msg = self.mav_connection.recv_match(type='RAW_IMU', blocking=True, timeout=1)
+            if msg:
+                if self.drone_id == 1:        
+                    self.get_logger().info("IMU DATA SAVING FOLLOWER 1")
+                    self.csv_writer.writerow([msg.time_usec, msg.xacc, msg.yacc, msg.zacc,
+                                        msg.xgyro, msg.ygyro, msg.zgyro,
+                                        msg.xmag, msg.ymag, msg.zmag])
+                elif self.drone_id == 2:
+                    self.get_logger().info("IMU DATA SAVING FOLLOWER 2")
+                    self.csv_writer.writerow([msg.time_usec, msg.xacc, msg.yacc, msg.zacc,
+                                        msg.xgyro, msg.ygyro, msg.zgyro,
+                                        msg.xmag, msg.ymag, msg.zmag])
+            else:
+                self.get_logger().error(f"No IMU Data")
+    
+    def __del__(self):
+        # Close the CSV file when done
+        self.csv_file.close()
 
 
 def main(args=None):

@@ -43,7 +43,7 @@ def generate_launch_description():
                 '--custom-location=40.072842,-105.230575,1586,0',
                 '--out=udp:127.0.0.1:14550',
                 '--out=udp:127.0.0.1:14551',
-                 '--add-param-file', param_file,
+                '--add-param-file', param_file,
             ],
             output='screen',
             shell=True,
@@ -58,8 +58,8 @@ def generate_launch_description():
             cmd=[
                 'sim_vehicle.py',
                 '-v', 'ArduCopter',
-                '--model', 'JSON',
                 '-f', 'gazebo-iris',
+                '--model', 'JSON',
                 '--console',
                 '--instance', '1',
                 '--sysid', '2',
@@ -131,7 +131,7 @@ def generate_launch_description():
             name='leader_drone_node',
             output='screen',
             parameters=[{
-                'mavlink_connection': 'udp:localhost:14550',
+                'mavlink_connection': 'udp:localhost:14551',
             }]
         )
 
@@ -142,7 +142,8 @@ def generate_launch_description():
             name='follower_drone_node1',
             output='screen',
             parameters=[{
-                'mavlink_connection': 'udp:localhost:14560',
+                'drone_id' : 1,
+                'mavlink_connection': 'udp:localhost:14561',
                 'leader_pos_topic': '/leader_drone_node/position',
                 'offset': [-2.0, 0.0, 0.0],
                 'follow_distance': 2.0
@@ -155,7 +156,8 @@ def generate_launch_description():
             name='follower_drone_node2',
             output='screen',
             parameters=[{
-                'mavlink_connection': 'udp:localhost:14570',
+                'drone_id' : 2,
+                'mavlink_connection': 'udp:localhost:14571',
                 'leader_pos_topic': '/leader_drone_node/position',
                 'offset': [-4.0, 0.0, 0.0],
                 'follow_distance': 4.0
@@ -172,7 +174,9 @@ def generate_launch_description():
             LogInfo(msg="Spawning drones in Gazebo..."),
             TimerAction(period=20.0, actions=[bridge]),
             LogInfo(msg="Starting ROS nodes..."),
-            TimerAction(period=25.0, actions=[leader_node, follower_node1, follower_node2])
+            TimerAction(period=25.0, actions=[leader_node]),
+            TimerAction(period=30.0, actions=[follower_node1]),
+            TimerAction(period=35.0, actions=[follower_node2])
         ])
     except Exception as e:
         print(f"Error in launch file: {str(e)}")
