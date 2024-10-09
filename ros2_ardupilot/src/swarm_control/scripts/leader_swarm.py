@@ -4,6 +4,7 @@ from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped
 from pymavlink import mavutil
 import time
+import csv
 from std_msgs.msg import Bool
 
 
@@ -32,6 +33,13 @@ class LeaderDrone(Node):
             (0, 0, 20),
             (0, 0, 10)
         ]
+        # Open a CSV file to write the IMU data
+        self.csv_file = open('/root/ardu_ws/src/swarm_control/imu_log/imu_data_leader.csv', mode='a') 
+        self.csv_writer = csv.writer(self.csv_file)
+        self.csv_writer.writerow(["LEADER"])
+        self.csv_writer.writerow(["Time", "Orientation X", "Orientation Y", "Orientation Z",
+                                "Angular Velocity X", "Angular Velocity Y", "Angular Velocity Z",
+                                "Linear Acceleration X", "Linear Acceleration Y", "Linear Acceleration Z"])
 
     def attempt_connect(self):
         if self.mav_connection is None or not self.mav_connection.target_system:
@@ -44,6 +52,7 @@ class LeaderDrone(Node):
                 self.get_logger().info("Heartbeat received!")
                 self.connect_timer.cancel()
                 self.setup_and_arm()
+                self.imu_timer = self.create_timer(1.0, self.imu_values)
             except Exception as e:
                 self.get_logger().error(f"Error in connection process: {str(e)}")
 
@@ -200,6 +209,21 @@ class LeaderDrone(Node):
             self.mav_connection.target_component,
             1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500)  # Center sticks
         self.get_logger().info("Basic movement test completed")
+    
+    def imu_values(self):
+        while self.arm_drone():
+            msg = self.mav_connection.recv_match(type='RAW_IMU', blocking=True, timeout=1)
+            if msg:
+                self.get_logger().info("IMU DATA SAVING LEADER")
+                self.csv_writer.writerow([msg.time_usec, msg.xacc, msg.yacc, msg.zacc,
+                                    msg.xgyro, msg.ygyro, msg.zgyro,
+                                    msg.xmag, msg.ymag, msg.zmag])
+            else:
+                self.get_logger().error(f"No IMU Data")
+
+    def __del__(self):
+        # Close the CSV file when done
+        self.csv_file.close()
 
 
 def main(args=None):
