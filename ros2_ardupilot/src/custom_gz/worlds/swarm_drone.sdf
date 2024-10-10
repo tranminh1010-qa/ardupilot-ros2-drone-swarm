@@ -1,8 +1,8 @@
 <?xml version="1.0" ?>
 <sdf version="1.9">
   <world name="iris_runway">
-    <physics name="1ms" type="ignore">
-      <max_step_size>0.001</max_step_size>
+    <physics name="4ms" type="ignore">
+      <max_step_size>0.004</max_step_size>
       <real_time_factor>1.0</real_time_factor>
     </physics>
 
@@ -118,16 +118,34 @@
     <include>
       <uri>model://drone1</uri>
       <pose degrees="true">0 0 0.195 0 0 90</pose>
+      <link name="base_link">
+        <sensor name="gps" type="gps">
+          <always_on>1</always_on>
+          <update_rate>10</update_rate>
+        </sensor>
+      </link>
     </include>
 
     <include>
       <uri>model://drone2</uri>
       <pose degrees="true">5 0 0.195 0 0 90</pose>
+      <link name="base_link">
+        <sensor name="gps" type="gps">
+          <always_on>1</always_on>
+          <update_rate>10</update_rate>
+        </sensor>
+      </link>
     </include>
 
     <include>
       <uri>model://drone3</uri>
       <pose degrees="true">10 0 0.195 0 0 90</pose>
+      <link name="base_link">
+        <sensor name="gps" type="gps">
+          <always_on>1</always_on>
+          <update_rate>10</update_rate>
+        </sensor>
+      </link>
     </include>
 
   </world>

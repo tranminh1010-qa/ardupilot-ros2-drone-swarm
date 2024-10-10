@@ -38,7 +38,37 @@ docker run -it --net=host \
   --volume="$HOME/.Xauthority:/root/.Xauthority:rw" \
   --volume="$(pwd)/src/swarm_control:/root/ardu_ws/src/swarm_control" \
   --volume="$(pwd)/src/custom_gz:/root/ardu_ws/src/custom_gz" \
+ --runtime=nvidia \
+    ardupilot-ros2
+```
+
+If you have GPU and Cuda runtime set up on the device, you can also run the following for much faster performance 
+```bash
+docker run -it --net=host \
+  --name="ardu_gpu" \
+  --env="DISPLAY=$DISPLAY" \
+  --env="QT_X11_NO_MITSHM=1" \
+  --env="LIBGL_ALWAYS_INDIRECT=0" \
+  --env="NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}" \
+  --env="NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:+$NVIDIA_DRIVER_CAPABILITIES,}graphics" \
+  --env="GZ_GPU_DEBUG=1" \
+  --env="ROS_DOMAIN_ID=42" \
+  --env="RMW_IMPLEMENTATION=rmw_cyclonedds_cpp" \
+  --env="GZ_RENDERING_ENGINE=ogre2" \
+  --env="GZ_SIM_WORKER_THREADS=6" \
+  --device=/dev/dri:/dev/dri \
+  --volume="/tmp/.X11-unix:/tmp/.X11-unix:ro" \
+  --volume="$HOME/.Xauthority:/root/.Xauthority:rw" \
+  --volume="$(pwd)/src/swarm_control:/root/ardu_ws/src/swarm_control" \
+  --volume="$(pwd)/src/custom_gz:/root/ardu_ws/src/custom_gz" \
+  --runtime=nvidia \
+  --gpus all \
+  --shm-size=1g \
+  --cpus=4 --memory=8g \
+  --ulimit rtprio=99 \
+  --security-opt seccomp=unconfined \
   ardupilot-ros2
+
 ```
 The terminal should hang, to continue, open a new terminal and keep working. 
 

@@ -1,145 +1,65 @@
 #!/usr/bin/env python3
 import rclpy
-from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped
 from pymavlink import mavutil
 import time
-import csv
+from base_drone import BaseDrone, DroneState
+from log_imu_data import IMULogger
 from std_msgs.msg import Bool
+from sensor_msgs.msg import Imu
 
 
-class LeaderDrone(Node):
+def is_position_reached(current_pos, target_pos, tolerance=0.3):
+    return all(abs(c - t) < tolerance for c, t in zip(current_pos, target_pos))
+
+
+class LeaderDrone(BaseDrone):
     def __init__(self):
-        super().__init__('leader_drone_node')
-        self.get_logger().info("LeaderDrone __init__ started")
-
-        self.declare_parameter('mavlink_connection', 'udp:localhost:14550')
-        self.mavlink_connection = self.get_parameter('mavlink_connection').value
-
-        self.mav_connection = None
-        self.connect_timer = self.create_timer(5.0, self.attempt_connect)
-
+        super().__init__('leader_drone_node', 0, 'udp:localhost:14550')
         self.position_publisher = self.create_publisher(PoseStamped, '/leader_drone_node/position', 10)
-        self.position_timer = self.create_timer(1.0, self.publish_position)
+        self.position_timer = self.create_timer(30, self.publish_position)
         self.takeoff_complete_publisher = self.create_publisher(Bool, '/leader_takeoff_complete', 10)
         self.waypoints = [
-            (10, 0, 10),
-            (10, 10, 10),
-            (0, 10, 10),
-            (-10, 10, 10),
-            (-10, -10, 10),
-            (10, -10, 10),
-            (10, 0, 20),
-            (0, 0, 20),
-            (0, 0, 10)
+            (10, 0, 10), (10, 10, 10), (0, 10, 10), (-10, 10, 10),
+            (-10, -10, 10), (10, -10, 10), (10, 0, 20), (0, 0, 20), (0, 0, 10)
         ]
-        # Open a CSV file to write the IMU data
-        self.csv_file = open('/root/ardu_ws/src/swarm_control/imu_log/imu_data_leader.csv', mode='a') 
-        self.csv_writer = csv.writer(self.csv_file)
-        self.csv_writer.writerow(["LEADER"])
-        self.csv_writer.writerow(["Time", "Orientation X", "Orientation Y", "Orientation Z",
-                                "Angular Velocity X", "Angular Velocity Y", "Angular Velocity Z",
-                                "Linear Acceleration X", "Linear Acceleration Y", "Linear Acceleration Z"])
+        self.imu_logger = IMULogger(self, '/root/ardu_ws/src/swarm_control/imu_log/imu_data_leader.csv', "LEADER")
+        self.imu_subscription = self.create_subscription(
+            Imu,
+            '/leader_drone_node/imu',
+            self.imu_callback,
+            10)
+        self.ekf_check_timer = None
+        self.mission_start_timer = self.create_timer(15.0, self.start_mission_timer_callback)
 
-    def attempt_connect(self):
-        if self.mav_connection is None or not self.mav_connection.target_system:
-            try:
-                self.get_logger().info(f"Attempting to connect to {self.mavlink_connection}")
-                self.mav_connection = mavutil.mavlink_connection(self.mavlink_connection, source_system=1, timeout=60)
-                self.get_logger().info(f"Connection established: {self.mavlink_connection}")
-                self.get_logger().info("Waiting for heartbeat...")
-                self.mav_connection.wait_heartbeat(timeout=30)
-                self.get_logger().info("Heartbeat received!")
-                self.connect_timer.cancel()
-                self.setup_and_arm()
-                self.imu_timer = self.create_timer(1.0, self.imu_values)
-            except Exception as e:
-                self.get_logger().error(f"Error in connection process: {str(e)}")
 
-    def setup_and_arm(self):
-        self.set_guided_mode()
-        time.sleep(2)
-        self.wait_for_position_estimate()
-        if self.arm_drone():
-            self.get_logger().info("Drone armed successfully")
-            if self.takeoff(10):
-                self.get_logger().info("Takeoff successful")
-                self.start_mission()
-            else:
-                self.get_logger().error("Takeoff failed")
+    def imu_callback(self, msg):
+        self.imu_logger.log_imu_data(msg)
+
+    def start_mission_timer_callback(self):
+        if self.state == DroneState.CONNECTED:
+            self.get_logger().info("Starting mission setup and arming process")
+            self.setup_and_arm()
+            if not self.ekf_check_timer:
+                self.ekf_check_timer = self.create_timer(1.0, self.check_ekf_health)
+            self.mission_start_timer.cancel()
         else:
-            self.get_logger().error("Arming failed")
+            self.get_logger().warn(f"Not ready to start mission. Current state: {self.state}")
 
-    def wait_for_position_estimate(self):
-        self.get_logger().info("Waiting for position estimate...")
-        while True:
-            msg = self.mav_connection.recv_match(type='EKF_STATUS_REPORT', blocking=True, timeout=10)
-            if msg and (msg.flags & mavutil.mavlink.EKF_PRED_POS_HORIZ_ABS):
-                self.get_logger().info("Got position estimate")
-                return True
-            self.get_logger().info("Still waiting for position estimate...")
-            time.sleep(1)
-
-    def set_guided_mode(self):
-        self.mav_connection.mav.command_long_send(
-            self.mav_connection.target_system,
-            self.mav_connection.target_component,
-            mavutil.mavlink.MAV_CMD_DO_SET_MODE,
-            0,
-            mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
-            4,  # 4 is GUIDED mode for ArduCopter
-            0, 0, 0, 0, 0)
-        self.get_logger().info("Set GUIDED mode command sent")
-
-        # Wait for mode change acknowledgement
-        start = time.time()
-        while time.time() - start < 10:
-            msg = self.mav_connection.recv_match(type='COMMAND_ACK', blocking=True, timeout=1)
-            if msg and msg.command == mavutil.mavlink.MAV_CMD_DO_SET_MODE:
-                if msg.result == mavutil.mavlink.MAV_RESULT_ACCEPTED:
-                    self.get_logger().info("GUIDED mode set successfully")
-                    return True
-        self.get_logger().error("Failed to set GUIDED mode")
-        return False
-
-    def arm_drone(self):
-        self.get_logger().info("Attempting to arm drone")
-        self.mav_connection.mav.command_long_send(
-            self.mav_connection.target_system,
-            self.mav_connection.target_component,
-            mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM,
-            0, 1, 0, 0, 0, 0, 0, 0)
-
-        # Wait for armed state
-        start = time.time()
-        while time.time() - start < 30:
-            msg = self.mav_connection.recv_match(type='HEARTBEAT', blocking=True, timeout=5)
-            if msg and msg.base_mode & mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED:
-                self.get_logger().info("Drone armed successfully.")
-                return True
-        self.get_logger().error("Arming failed")
-        return False
-
-    def takeoff(self, altitude):
-        self.get_logger().info(f"Attempting to takeoff to {altitude} meters")
-        self.mav_connection.mav.command_long_send(
-            self.mav_connection.target_system,
-            self.mav_connection.target_component,
-            mavutil.mavlink.MAV_CMD_NAV_TAKEOFF,
-            0, 0, 0, 0, 0, 0, 0, altitude)
-
-        # Wait for reached target altitude
-        start = time.time()
-        while time.time() - start < 60:
-            msg = self.mav_connection.recv_match(type='GLOBAL_POSITION_INT', blocking=True, timeout=5)
-            if msg and (msg.relative_alt / 1000.0) >= altitude * 0.95:
-                self.get_logger().info("Takeoff successful")
-                takeoff_msg = Bool()
-                takeoff_msg.data = True
-                self.takeoff_complete_publisher.publish(takeoff_msg)
-                return True
-        self.get_logger().error("Takeoff failed")
-        return False
+    def publish_position(self):
+        if self.mav_connection:
+            msg = self.mav_connection.recv_match(type='LOCAL_POSITION_NED', blocking=False)
+            if msg:
+                pose = PoseStamped()
+                pose.header.stamp = self.get_clock().now().to_msg()
+                pose.header.frame_id = "map"
+                pose.pose.position.x = msg.x
+                pose.pose.position.y = msg.y
+                pose.pose.position.z = -msg.z  # NED to ENU conversion
+                self.position_publisher.publish(pose)
+                self.get_logger().info(f"Published leader position: x={msg.x:.2f}, y={msg.y:.2f}, z={-msg.z:.2f}")
+            else:
+                self.get_logger().warn("Failed to get leader position")
 
     def start_mission(self):
         self.get_logger().info("Starting mission")
@@ -156,75 +76,79 @@ class LeaderDrone(Node):
     def goto_position(self, x, y, z):
         self.get_logger().info(f"Sending goto command: x={x}, y={y}, z={z}")
         self.mav_connection.mav.set_position_target_local_ned_send(
-            0,  # time_boot_ms
-            self.mav_connection.target_system,
-            self.mav_connection.target_component,
-            mavutil.mavlink.MAV_FRAME_LOCAL_NED,
-            0b0000111111111000,  # type_mask (only positions enabled)
-            x, y, -z,  # x, y, z positions (z is negative in NED frame)
-            0, 0, 0,  # x, y, z velocity in m/s
-            0, 0, 0,  # x, y, z acceleration
-            0, 0)  # yaw, yaw_rate
+            0, self.mav_connection.target_system, self.mav_connection.target_component,
+            mavutil.mavlink.MAV_FRAME_LOCAL_NED, 0b0000111111111000,
+            x, y, -z, 0, 0, 0, 0, 0, 0, 0, 0)
 
-        # Wait for reaching the position
         start = time.time()
         while time.time() - start < 60:
             msg = self.mav_connection.recv_match(type='LOCAL_POSITION_NED', blocking=True, timeout=1)
             if msg:
                 current_pos = (msg.x, msg.y, -msg.z)
-                self.get_logger().info(
-                    f"Current position: x={current_pos[0]:.2f}, y={current_pos[1]:.2f}, z={current_pos[2]:.2f}")
-                if self.is_position_reached(current_pos, (x, y, z)):
+                self.get_logger().info(f"Current position: x={current_pos[0]:.2f}, y={current_pos[1]:.2f}, z={current_pos[2]:.2f}")
+                if is_position_reached(current_pos, (x, y, z)):
                     self.get_logger().info(f"Reached position: x={x}, y={y}, z={z}")
                     return True
-            time.sleep(3)  # Check every second
+            time.sleep(1)
         self.get_logger().error(f"Failed to reach position: x={x}, y={y}, z={z}")
         return False
 
-    def is_position_reached(self, current_pos, target_pos, tolerance=0.3):
-        return all(abs(c - t) < tolerance for c, t in zip(current_pos, target_pos))
+    def takeoff_with_retry(self):
+        if self.takeoff_attempts < self.max_attempts:
+            self.takeoff_attempts += 1
+            self.state = DroneState.TAKING_OFF
+            self.get_logger().info(f"Leader: Takeoff attempt {self.takeoff_attempts}")
 
-    def publish_position(self):
-        if self.mav_connection:
-            msg = self.mav_connection.recv_match(type='LOCAL_POSITION_NED', blocking=False)
-            if msg:
-                pose = PoseStamped()
-                pose.header.stamp = self.get_clock().now().to_msg()
-                pose.header.frame_id = "map"
-                pose.pose.position.x = msg.x
-                pose.pose.position.y = msg.y
-                pose.pose.position.z = -msg.z  # NED to ENU conversion
-                self.position_publisher.publish(pose)
-                self.get_logger().debug(f"Published position: x={msg.x:.2f}, y={msg.y:.2f}, z={-msg.z:.2f}")
+            if not self.set_guided_mode():
+                self.get_logger().error("Failed to set GUIDED mode")
+                self.create_timer(5.0, self.takeoff_with_retry)
+                return
 
-    def test_movement(self):
-        self.get_logger().info("Testing basic movement...")
-        self.mav_connection.mav.rc_channels_override_send(
-            self.mav_connection.target_system,
-            self.mav_connection.target_component,
-            1500, 1600, 1500, 1500, 1500, 1500, 1500, 1500)  # Pitch forward
-        time.sleep(5)
-        self.mav_connection.mav.rc_channels_override_send(
-            self.mav_connection.target_system,
-            self.mav_connection.target_component,
-            1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500)  # Center sticks
-        self.get_logger().info("Basic movement test completed")
-    
-    def imu_values(self):
-        while self.arm_drone():
-            msg = self.mav_connection.recv_match(type='RAW_IMU', blocking=True, timeout=1)
-            if msg:
-                self.get_logger().info("IMU DATA SAVING LEADER")
-                self.csv_writer.writerow([msg.time_usec, msg.xacc, msg.yacc, msg.zacc,
-                                    msg.xgyro, msg.ygyro, msg.zgyro,
-                                    msg.xmag, msg.ymag, msg.zmag])
+            if not self.arm_drone():
+                self.get_logger().error("Failed to arm the drone")
+                self.create_timer(5.0, self.takeoff_with_retry)
+                return
+
+            if self.takeoff(10):
+                self.get_logger().info("Leader: Takeoff command accepted")
+
+                # Wait for the drone to reach the target altitude
+                start_time = time.time()
+                while time.time() - start_time < 30:  # Wait up to 30 seconds
+                    msg = self.mav_connection.recv_match(type='GLOBAL_POSITION_INT', blocking=True, timeout=1)
+                    if msg:
+                        relative_alt = msg.relative_alt / 1000.0  # Convert mm to m
+                        self.get_logger().info(f"Current altitude: {relative_alt:.2f} m")
+                        if abs(relative_alt - 10) < 0.5:  # Within 0.5m of target altitude
+                            self.get_logger().info("Leader: Takeoff successful")
+                            self.takeoff_attempts = 0
+                            self.state = DroneState.FLYING
+                            takeoff_complete_msg = Bool()
+                            takeoff_complete_msg.data = True
+                            self.takeoff_complete_publisher.publish(takeoff_complete_msg)
+                            self.start_mission()
+                            return
+                    time.sleep(1)
+
+                self.get_logger().warn("Leader: Takeoff timeout, retrying")
+                self.create_timer(5.0, self.takeoff_with_retry)
             else:
-                self.get_logger().error(f"No IMU Data")
+                self.get_logger().warn(f"Leader: Takeoff command failed, attempt {self.takeoff_attempts}")
+                self.create_timer(5.0, self.takeoff_with_retry)
+        else:
+            self.get_logger().error(f"Leader: Failed to takeoff after {self.max_attempts} attempts")
+            self.state = DroneState.ERROR
+
+    def log_imu_data(self):
+        msg = self.mav_connection.recv_match(type='RAW_IMU', blocking=True, timeout=1)
+        if msg:
+            self.get_logger().info("IMU DATA SAVING LEADER")
+            self.imu_logger.log_imu_data(msg)
+        else:
+            self.get_logger().error("No IMU Data")
 
     def __del__(self):
-        # Close the CSV file when done
-        self.csv_file.close()
-
+        self.imu_logger.close()
 
 def main(args=None):
     rclpy.init(args=args)

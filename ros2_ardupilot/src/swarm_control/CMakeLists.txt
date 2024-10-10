@@ -19,13 +19,15 @@ include_directories(
   ${mavros_msgs_INCLUDE_DIRS}
   ${fastcdr_INCLUDE_DIRS}
 )
+file(GLOB SCRIPT_FILES
+  "scripts/*"
+  "utility/*"
+)
+
 
 # Install Python scripts
 install(PROGRAMS
-  scripts/leader_swarm.py
-  scripts/follower_drone.py
-  scripts/drone_control_node.py
-  scripts/mavlink_node.py
+   ${SCRIPT_FILES}
   DESTINATION lib/${PROJECT_NAME}
 )
 

@@ -6,6 +6,7 @@ from launch_ros.actions import Node
 from launch.substitutions import LaunchConfiguration
 from launch.actions import DeclareLaunchArgument
 from ament_index_python.packages import get_package_share_directory
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 
 
 def generate_launch_description():
@@ -100,7 +101,6 @@ def generate_launch_description():
             }
         )
 
-
         # ROS-Gazebo bridge
         bridge = GroupAction([
             Node(
@@ -131,52 +131,52 @@ def generate_launch_description():
             name='leader_drone_node',
             output='screen',
             parameters=[{
+                'drone_id': 0,
                 'mavlink_connection': 'udp:localhost:14551',
-            }]
+            }],
+            remappings=[('/leader_drone_node/position', '/leader_position')],
         )
 
-        # Follower drone nodes
         follower_node1 = Node(
             package='swarm_control',
             executable='follower_drone.py',
-            name='follower_drone_node1',
+            name='follower_drone_node_1',
             output='screen',
             parameters=[{
-                'drone_id' : 1,
+                'drone_id': 1,
                 'mavlink_connection': 'udp:localhost:14561',
-                'leader_pos_topic': '/leader_drone_node/position',
-                'offset': [-2.0, 0.0, 0.0],
-                'follow_distance': 2.0
-            }]
+                'leader_pos_topic': '/leader_position',
+                'offset': [-2.0, -2.0, 0.0],
+                'follow_distance': 7.0
+            }],
         )
 
         follower_node2 = Node(
             package='swarm_control',
             executable='follower_drone.py',
-            name='follower_drone_node2',
+            name='follower_drone_node_2',
             output='screen',
             parameters=[{
-                'drone_id' : 2,
+                'drone_id': 2,
                 'mavlink_connection': 'udp:localhost:14571',
-                'leader_pos_topic': '/leader_drone_node/position',
-                'offset': [-4.0, 0.0, 0.0],
-                'follow_distance': 4.0
-
-            }]
+                'leader_pos_topic': '/leader_position',
+                'offset': [-2.0, 2.0, 0.0],
+                'follow_distance': 7.0
+            }],
         )
 
         return LaunchDescription([
             gz_sim,
             LogInfo(msg="Starting SITL instances..."),
             TimerAction(period=5.0, actions=[ardupilot_sitl_leader]),
-            TimerAction(period=10.0, actions=[ardupilot_sitl_follower1]),
-            TimerAction(period=15.0, actions=[ardupilot_sitl_follower2]),
+            TimerAction(period=7.0, actions=[ardupilot_sitl_follower1]),
+            TimerAction(period=10.0, actions=[ardupilot_sitl_follower2]),
             LogInfo(msg="Spawning drones in Gazebo..."),
-            TimerAction(period=20.0, actions=[bridge]),
+            TimerAction(period=12.0, actions=[bridge]),
             LogInfo(msg="Starting ROS nodes..."),
-            TimerAction(period=25.0, actions=[leader_node]),
-            TimerAction(period=30.0, actions=[follower_node1]),
-            TimerAction(period=35.0, actions=[follower_node2])
+            TimerAction(period=30.0, actions=[leader_node]),
+            TimerAction(period=32.0, actions=[follower_node1]),
+            TimerAction(period=34.0, actions=[follower_node2])
         ])
     except Exception as e:
         print(f"Error in launch file: {str(e)}")
