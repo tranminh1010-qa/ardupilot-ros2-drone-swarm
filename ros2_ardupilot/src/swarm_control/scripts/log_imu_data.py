@@ -12,7 +12,7 @@ class IMULogger:
         self.csv_writer = csv.writer(self.csv_file)
         self.csv_writer.writerow([drone_label])
         self.csv_writer.writerow([
-            "Time", "Orientation X", "Orientation Y", "Orientation Z",
+            "Time", "Magnetic Field X", "Magnetic Field X", "Magnetic Field Z",
             "Angular Velocity X", "Angular Velocity Y", "Angular Velocity Z",
             "Linear Acceleration X", "Linear Acceleration Y", "Linear Acceleration Z"
         ])
@@ -20,9 +20,9 @@ class IMULogger:
     def log_imu_data(self, msg):
         self.csv_writer.writerow([
             self.node.get_clock().now().to_msg().sec,
-            msg.orientation.x, msg.orientation.y, msg.orientation.z,
-            msg.angular_velocity.x, msg.angular_velocity.y, msg.angular_velocity.z,
-            msg.linear_acceleration.x, msg.linear_acceleration.y, msg.linear_acceleration.z
+            msg.xmag, msg.ymag, msg.ymag,
+            msg.xgyro, msg.ygyro, msg.zgyro,
+            msg.xacc, msg.yacc, msg.zacc
         ])
 
     def close(self):

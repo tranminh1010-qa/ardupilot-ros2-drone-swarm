@@ -6,7 +6,7 @@ from geometry_msgs.msg import PoseStamped
 from pymavlink import mavutil
 from sensor_msgs.msg import Imu
 import rclpy
-import time
+from datetime import datetime
 
 class FollowerDrone(BaseDrone):
     def __init__(self, node_name, drone_id, mavlink_connection, leader_pos_topic, offset, follow_distance):
@@ -37,8 +37,10 @@ class FollowerDrone(BaseDrone):
         self.create_subscription(PoseStamped, self.leader_pos_topic, self.leader_position_callback, 10)
         self.create_subscription(Bool, '/leader_takeoff_complete', self.leader_takeoff_callback, 10)
 
+        now = datetime.now()
+        timestamp = now.strftime("%Y-%m-%d_%H-%M-%S")
         self.imu_logger = IMULogger(self,
-                                    f'/root/ardu_ws/src/swarm_control/imu_log/imu_data_follower{self.drone_id}.csv',
+                                    f'/root/ardu_ws/src/swarm_control/imu_log/imu_data_follower{self.drone_id}_{timestamp}.csv',
                                     f"Follower {self.drone_id}")
         self.imu_subscription = self.create_subscription(
             Imu,
