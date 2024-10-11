@@ -7,7 +7,7 @@ from base_drone import BaseDrone, DroneState
 from log_imu_data import IMULogger
 from std_msgs.msg import Bool
 from sensor_msgs.msg import Imu
-
+from datetime import datetime
 
 def is_position_reached(current_pos, target_pos, tolerance=0.3):
     return all(abs(c - t) < tolerance for c, t in zip(current_pos, target_pos))
@@ -23,7 +23,9 @@ class LeaderDrone(BaseDrone):
             (10, 0, 10), (10, 10, 10), (0, 10, 10), (-10, 10, 10),
             (-10, -10, 10), (10, -10, 10), (10, 0, 20), (0, 0, 20), (0, 0, 10)
         ]
-        self.imu_logger = IMULogger(self, '/root/ardu_ws/src/swarm_control/imu_log/imu_data_leader.csv', "LEADER")
+        now = datetime.now()
+        timestamp = now.strftime("%Y-%m-%d_%H-%M-%S")
+        self.imu_logger = IMULogger(self, f'/root/ardu_ws/src/swarm_control/imu_log/imu_data_leader_{timestamp}.csv', "LEADER")
         self.imu_subscription = self.create_subscription(
             Imu,
             '/leader_drone_node/imu',
