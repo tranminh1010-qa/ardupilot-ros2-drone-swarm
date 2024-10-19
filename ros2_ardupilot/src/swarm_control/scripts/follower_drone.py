@@ -96,7 +96,7 @@ class FollowerDrone(BaseDrone):
     def check_current_position(self):
         msg = self.mav_connection.recv_match(type='LOCAL_POSITION_NED', blocking=False)
         if msg:
-            self.get_logger().info(
+            self.get_logger().debug(
                 f"Drone {self.drone_id}: Current position: x={msg.x:.2f}, y={msg.y:.2f}, z={-msg.z:.2f}")
         else:
             self.get_logger().warn(f"Drone {self.drone_id}: Failed to get current position")
