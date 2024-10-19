@@ -15,7 +15,7 @@ def is_position_reached(current_pos, target_pos, tolerance=0.3):
 
 class LeaderDrone(BaseDrone):
     def __init__(self):
-        super().__init__('leader_drone_node', 0, 'udp:localhost:14550')
+        super().__init__('leader_drone_node', 0, 'udp:localhost:14551')
         self.position_publisher = self.create_publisher(PoseStamped, '/leader_drone_node/position', 10)
         self.position_timer = self.create_timer(30, self.publish_position)
         self.takeoff_complete_publisher = self.create_publisher(Bool, '/leader_takeoff_complete', 10)
@@ -25,18 +25,45 @@ class LeaderDrone(BaseDrone):
         ]
         now = datetime.now()
         timestamp = now.strftime("%Y-%m-%d_%H-%M-%S")
-        self.imu_logger = IMULogger(self, f'/root/ardu_ws/src/swarm_control/imu_log/imu_data_leader_{timestamp}.csv', "LEADER")
+        self.imu_logger = IMULogger(self, f'/root/ardu_ws/src/swarm_control/imu_log/imu_data_leader_{timestamp}.csv',
+                                    "LEADER")
         self.imu_subscription = self.create_subscription(
             Imu,
             '/leader_drone_node/imu',
             self.imu_callback,
             10)
-        self.ekf_check_timer = None
-        self.mission_start_timer = self.create_timer(15.0, self.start_mission_timer_callback)
 
+    def monitor_takeoff(self):
+        start_time = time.time()
+        while time.time() - start_time < 30:  # Wait up to 30 seconds
+            msg = self.mav_connection.recv_match(type='GLOBAL_POSITION_INT', blocking=True, timeout=1)
+            if msg:
+                relative_alt = msg.relative_alt / 1000.0  # Convert mm to m
+                self.get_logger().info(f"Current altitude: {relative_alt:.2f} m")
+                if abs(relative_alt - 10) < 0.5:  # Within 0.5m of target altitude
+                    self.get_logger().info("Leader: Takeoff successful")
+                    self.takeoff_attempts = 0
+                    self.state = DroneState.FLYING
+                    takeoff_complete_msg = Bool()
+                    takeoff_complete_msg.data = True
+                    self.takeoff_complete_publisher.publish(takeoff_complete_msg)
+                    self.start_mission()
+                    return
+            time.sleep(1)
+        self.get_logger().warn("Leader: Takeoff timeout, retrying")
+        self.create_timer(5.0, self.takeoff_with_retry)
 
-    def imu_callback(self, msg):
-        self.imu_logger.log_imu_data(msg)
+    def start_mission(self):
+        self.get_logger().info("Starting mission")
+        for i, wp in enumerate(self.waypoints):
+            self.get_logger().info(f"Moving to waypoint {i + 1}: {wp}")
+            if self.goto_position(*wp):
+                self.get_logger().info(f"Reached waypoint {i + 1}: {wp}")
+                time.sleep(2)  # Reduced hover time to 2 seconds
+            else:
+                self.get_logger().error(f"Failed to reach waypoint {i + 1}: {wp}")
+                break
+        self.get_logger().info("Mission completed")
 
     def start_mission_timer_callback(self):
         if self.state == DroneState.CONNECTED:
@@ -63,17 +90,8 @@ class LeaderDrone(BaseDrone):
             else:
                 self.get_logger().warn("Failed to get leader position")
 
-    def start_mission(self):
-        self.get_logger().info("Starting mission")
-        for i, wp in enumerate(self.waypoints):
-            self.get_logger().info(f"Moving to waypoint {i + 1}: {wp}")
-            if self.goto_position(*wp):
-                self.get_logger().info(f"Reached waypoint {i + 1}: {wp}")
-                time.sleep(2)  # Reduced hover time to 2 seconds
-            else:
-                self.get_logger().error(f"Failed to reach waypoint {i + 1}: {wp}")
-                break
-        self.get_logger().info("Mission completed")
+    def imu_callback(self, msg):
+        self.imu_logger.log_imu_data(msg)
 
     def goto_position(self, x, y, z):
         self.get_logger().info(f"Sending goto command: x={x}, y={y}, z={z}")
@@ -95,45 +113,16 @@ class LeaderDrone(BaseDrone):
         self.get_logger().error(f"Failed to reach position: x={x}, y={y}, z={z}")
         return False
 
+    def on_armed_success(self):
+        self.takeoff_with_retry()
+
     def takeoff_with_retry(self):
         if self.takeoff_attempts < self.max_attempts:
             self.takeoff_attempts += 1
             self.state = DroneState.TAKING_OFF
-            self.get_logger().info(f"Leader: Takeoff attempt {self.takeoff_attempts}")
-
-            if not self.set_guided_mode():
-                self.get_logger().error("Failed to set GUIDED mode")
-                self.create_timer(5.0, self.takeoff_with_retry)
-                return
-
-            if not self.arm_drone():
-                self.get_logger().error("Failed to arm the drone")
-                self.create_timer(5.0, self.takeoff_with_retry)
-                return
-
             if self.takeoff(10):
-                self.get_logger().info("Leader: Takeoff command accepted")
-
-                # Wait for the drone to reach the target altitude
-                start_time = time.time()
-                while time.time() - start_time < 30:  # Wait up to 30 seconds
-                    msg = self.mav_connection.recv_match(type='GLOBAL_POSITION_INT', blocking=True, timeout=1)
-                    if msg:
-                        relative_alt = msg.relative_alt / 1000.0  # Convert mm to m
-                        self.get_logger().info(f"Current altitude: {relative_alt:.2f} m")
-                        if abs(relative_alt - 10) < 0.5:  # Within 0.5m of target altitude
-                            self.get_logger().info("Leader: Takeoff successful")
-                            self.takeoff_attempts = 0
-                            self.state = DroneState.FLYING
-                            takeoff_complete_msg = Bool()
-                            takeoff_complete_msg.data = True
-                            self.takeoff_complete_publisher.publish(takeoff_complete_msg)
-                            self.start_mission()
-                            return
-                    time.sleep(1)
-
-                self.get_logger().warn("Leader: Takeoff timeout, retrying")
-                self.create_timer(5.0, self.takeoff_with_retry)
+                self.get_logger().info(f"Leader: Takeoff command accepted")
+                self.monitor_takeoff()
             else:
                 self.get_logger().warn(f"Leader: Takeoff command failed, attempt {self.takeoff_attempts}")
                 self.create_timer(5.0, self.takeoff_with_retry)
@@ -150,7 +139,8 @@ class LeaderDrone(BaseDrone):
             self.get_logger().error("No IMU Data")
 
     def __del__(self):
-        self.imu_logger.close()
+        if hasattr(self, 'imu_logger'):
+            self.imu_logger.close()
 
 def main(args=None):
     rclpy.init(args=args)

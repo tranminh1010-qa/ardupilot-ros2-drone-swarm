@@ -12,7 +12,7 @@ class FollowerDrone(BaseDrone):
     def __init__(self, node_name, drone_id, mavlink_connection, leader_pos_topic, offset, follow_distance):
         super().__init__(node_name, drone_id, mavlink_connection)
 
-        # Declare parameters
+        # Declare parame ters
         self.declare_parameter('drone_id', drone_id)
         self.declare_parameter('mavlink_connection', mavlink_connection)
         self.declare_parameter('leader_pos_topic', leader_pos_topic)

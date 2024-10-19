@@ -19,9 +19,18 @@ class DroneState(enum.Enum):
     LANDING = 7
     ERROR = 8
 
+
 class BaseDrone(Node):
     def __init__(self, node_name, drone_id, mavlink_connection):
         super().__init__(node_name)
+        self.waypoints = None
+        self.takeoff_complete_publisher = None
+        self.imu_subscription = None
+        self.imu_logger = None
+        self.position_publisher = None
+        self.mission_start_timer = None
+        self.position_timer = None
+        self.ekf_check_timer = None
         self.drone_id = drone_id
         self.mavlink_connection = mavlink_connection
         self.mav_connection = None
@@ -32,96 +41,93 @@ class BaseDrone(Node):
         self.takeoff_attempts = 0
         self.max_attempts = 3
 
-        self.connect_timer = self.create_timer(5.0, self.attempt_connect)
+        self.connection_timer = self.create_timer(1.0, self.connection_check)
         self.create_timer(5.0, self.check_armed_status)
-        self.heartbeat_timer = self.create_timer(1.0, self.heartbeat_check)
+
+    def connection_check(self):
+        if self.state != DroneState.CONNECTED:
+            self.attempt_connect()
+        else:
+            self.connection_timer.cancel()
+            self.post_connection_setup()
 
     def attempt_connect(self):
-        if self.state == DroneState.INITIALIZING or self.state == DroneState.CONNECTING:
-            try:
-                self.get_logger().info(f"Attempting to connect to {self.mavlink_connection}")
-                self.mav_connection = mavutil.mavlink_connection(self.mavlink_connection, source_system=self.drone_id + 1, timeout=60)
-                self.get_logger().info(f"Connection established: {self.mavlink_connection}")
-                self.get_logger().info("Waiting for heartbeat...")
-                self.mav_connection.wait_heartbeat(timeout=30)
-                self.get_logger().info("Heartbeat received!")
-                self.connect_timer.cancel()
-                self.state = DroneState.CONNECTED
+        try:
+            if not self.mav_connection:
+                self.mav_connection = mavutil.mavlink_connection(self.mavlink_connection,
+                                                                 source_system=self.drone_id + 1)
 
-                self.set_ekf_parameters()
-            except Exception as e:
-                self.get_logger().error(f"Error in connection process: {str(e)}")
-                self.state = DroneState.ERROR
+            self.mav_connection.wait_heartbeat(timeout=5)
+            self.get_logger().info(f"Connected to FCU on {self.mavlink_connection}")
+            self.state = DroneState.CONNECTED
+        except Exception as e:
+            self.get_logger().warn(f"Connection attempt failed: {str(e)}")
 
-    def check_ekf_health(self):
-        msg = self.mav_connection.recv_match(type='EKF_STATUS_REPORT', blocking=True, timeout=5)
-        if msg:
-            flags = msg.flags
-            return (flags & mavutil.mavlink.EKF_ATTITUDE and
-                    flags & mavutil.mavlink.EKF_VELOCITY_HORIZ and
-                    flags & mavutil.mavlink.EKF_VELOCITY_VERT and
-                    flags & mavutil.mavlink.EKF_POS_HORIZ_REL and
-                    flags & mavutil.mavlink.EKF_POS_HORIZ_ABS and
-                    flags & mavutil.mavlink.EKF_POS_VERT_ABS and
-                    flags & mavutil.mavlink.EKF_POS_VERT_AGL and
-                    flags & mavutil.mavlink.EKF_CONST_POS_MODE and
-                    flags & mavutil.mavlink.EKF_PRED_POS_HORIZ_REL)
-        return False
+    def post_connection_setup(self):
+       # self.set_ekf_parameters()
+        self.create_timer(5.0, self.start_mission_setup)
 
-    def set_ekf_parameters(self):
-        # Adjust these parameters as needed
-        self.mav_connection.param_set_send('EK2_CHECK_SCALE', 200)
-        self.mav_connection.param_set_send('EK3_CHECK_SCALE', 200)
-        self.mav_connection.param_set_send('EK2_ALT_SOURCE', 0)  # Use barometer for altitude
-        self.mav_connection.param_set_send('EK2_GPS_TYPE', 3)  # GPS with SBAS and Baro
-        self.mav_connection.param_set_send('EK2_IMU_MASK', 3)  # Use first two IMUs
-        self.mav_connection.param_set_send('EK2_MAG_MASK', 1)  # Use first magnetometer
-        self.mav_connection.param_set_send('EK2_ALT_SOURCE', 0)  # Use barometer for altitude
-        self.mav_connection.param_set_send('AHRS_EKF_TYPE', 2)  # Use EKF2
-        self.mav_connection.param_set_send('EK2_ENABLE', 1)
-        self.mav_connection.param_set_send('EK3_ENABLE', 0)
-        self.mav_connection.param_set_send('GPS_AUTO_CONFIG', 1)
-        self.mav_connection.param_set_send('GPS_AUTO_SWITCH', 1)
-
-        self.get_logger().info("EKF parameters set for more permissive arming")
+    def start_mission_setup(self):
+        if self.state == DroneState.CONNECTED:
+            self.get_logger().info("Starting mission setup and arming process")
+            self.state = DroneState.ARMING
+            self.setup_and_arm()
+        else:
+            self.get_logger().warn(f"Not ready to start mission. Current state: {self.state}")
 
     def setup_and_arm(self):
         if self.set_guided_mode():
-            self.set_ekf_parameters()
+        #    self.set_ekf_parameters()
             self.wait_for_gps()
             self.arm_drone_with_retry()
         else:
             self.get_logger().error("Failed to set GUIDED mode")
             self.state = DroneState.ERROR
 
+    def check_ekf_health(self):
+        msg = self.mav_connection.recv_match(type='EKF_STATUS_REPORT', blocking=True, timeout=5)
+        if msg:
+            flags = msg.flags
+            required_flags = [
+                (mavutil.mavlink.EKF_ATTITUDE, "Attitude"),
+                (mavutil.mavlink.EKF_VELOCITY_HORIZ, "Horizontal Velocity"),
+                (mavutil.mavlink.EKF_VELOCITY_VERT, "Vertical Velocity"),
+                (mavutil.mavlink.EKF_POS_HORIZ_REL, "Relative Horizontal Position"),
+                (mavutil.mavlink.EKF_POS_HORIZ_ABS, "Absolute Horizontal Position"),
+                (mavutil.mavlink.EKF_POS_VERT_ABS, "Absolute Vertical Position"),
+                (mavutil.mavlink.EKF_POS_VERT_AGL, "Vertical Position AGL"),
+                (mavutil.mavlink.EKF_CONST_POS_MODE, "Constant Position Mode"),
+                (mavutil.mavlink.EKF_PRED_POS_HORIZ_REL, "Predicted Horizontal Position")
+            ]
+
+            all_flags_set = True
+            for flag, name in required_flags:
+                if not flags & flag:
+                    self.get_logger().warn(f"EKF flag not set: {name}")
+                    all_flags_set = False
+
+            if all_flags_set:
+                self.get_logger().info("EKF is healthy")
+            else:
+                self.get_logger().warn("EKF is not healthy")
+            return all_flags_set
+        else:
+            self.get_logger().warn("No EKF_STATUS_REPORT received")
+            return False
+
     def wait_for_gps(self):
         self.get_logger().info("Waiting for GPS lock...")
-        while True:
+        start_time = time.time()
+        while time.time() - start_time < 30:  # Wait up to 30 seconds
             msg = self.mav_connection.recv_match(type='GPS_RAW_INT', blocking=True, timeout=1)
-            if msg and msg.fix_type >= 3:
-                self.get_logger().info("GPS lock acquired")
-                break
-            time.sleep(1)
-
-    def set_guided_mode(self):
-        self.mav_connection.mav.command_long_send(
-            self.mav_connection.target_system,
-            self.mav_connection.target_component,
-            mavutil.mavlink.MAV_CMD_DO_SET_MODE,
-            0,
-            mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
-            4,  # 4 is GUIDED mode for ArduCopter
-            0, 0, 0, 0, 0)
-        self.get_logger().info("Set GUIDED mode command sent")
-
-        start = time.time()
-        while time.time() - start < 10:
-            msg = self.mav_connection.recv_match(type='COMMAND_ACK', blocking=False)
-            if msg and msg.command == mavutil.mavlink.MAV_CMD_DO_SET_MODE:
-                if msg.result == mavutil.mavlink.MAV_RESULT_ACCEPTED:
-                    self.get_logger().info("GUIDED mode set successfully")
+            if msg:
+                self.get_logger().info(
+                    f"GPS status: fix_type={msg.fix_type}, satellites_visible={msg.satellites_visible}")
+                if msg.fix_type >= 3:
+                    self.get_logger().info("GPS lock acquired")
                     return True
-        self.get_logger().error("Failed to set GUIDED mode")
+            time.sleep(1)
+        self.get_logger().error("Failed to acquire GPS lock")
         return False
 
     def arm_drone(self):
@@ -148,7 +154,26 @@ class BaseDrone(Node):
                         self.disarm_requested = False
                         self.get_logger().info("Drone armed successfully (confirmed by HEARTBEAT).")
                         return True
-        self.get_logger().error("Arming failed")
+
+    def set_guided_mode(self):
+        self.mav_connection.mav.command_long_send(
+            self.mav_connection.target_system,
+            self.mav_connection.target_component,
+            mavutil.mavlink.MAV_CMD_DO_SET_MODE,
+            0,
+            mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
+            4,  # 4 is GUIDED mode for ArduCopter
+            0, 0, 0, 0, 0)
+        self.get_logger().info("Set GUIDED mode command sent")
+
+        start = time.time()
+        while time.time() - start < 10:
+            msg = self.mav_connection.recv_match(type='COMMAND_ACK', blocking=False)
+            if msg and msg.command == mavutil.mavlink.MAV_CMD_DO_SET_MODE:
+                if msg.result == mavutil.mavlink.MAV_RESULT_ACCEPTED:
+                    self.get_logger().info("GUIDED mode set successfully")
+                    return True
+        self.get_logger().error("Failed to set GUIDED mode")
         return False
 
     def takeoff(self, altitude):
@@ -182,30 +207,14 @@ class BaseDrone(Node):
             self.arming_attempts += 1
             self.get_logger().info(f"Drone {self.drone_id}: Arming attempt {self.arming_attempts}")
 
-            # Wait for EKF to be healthy
-            start_time = time.time()
-            while time.time() - start_time < 30:  # Wait up to 30 seconds
-                if self.check_ekf_health():
-                    break
-                self.get_logger().info("Waiting for EKF to be healthy...")
-                time.sleep(1)
-            else:
-                self.get_logger().warn("EKF not healthy after 30 seconds, attempting to arm anyway")
-
-            # Wait for GPS fix
-            while True:
-                msg = self.mav_connection.recv_match(type='GPS_RAW_INT', blocking=True, timeout=1)
-                if msg and msg.fix_type >= 3:
-                    break
-                self.get_logger().info("Waiting for GPS fix...")
-                time.sleep(1)
+            if not self.check_ekf_health():
+                self.get_logger().warn("EKF not healthy, attempting to arm anyway")
 
             if self.arm_drone():
                 self.get_logger().info(f"Drone {self.drone_id}: Armed successfully")
                 self.arming_attempts = 0
                 self.state = DroneState.ARMED
-                if self.drone_id == 0:  # If this is the leader drone
-                    self.takeoff_with_retry()
+                self.on_armed_success()
             else:
                 self.get_logger().warn(f"Drone {self.drone_id}: Arming failed, attempt {self.arming_attempts}")
                 self.create_timer(5.0, self.arm_drone_with_retry)
