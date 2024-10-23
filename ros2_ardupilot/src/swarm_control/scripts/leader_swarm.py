@@ -41,7 +41,7 @@ class LeaderDrone(BaseDrone):
             msg = self.mav_connection.recv_match(type='GLOBAL_POSITION_INT', blocking=True, timeout=1)
             if msg:
                 relative_alt = msg.relative_alt / 1000.0  # Convert mm to m
-                self.get_logger().info(f"Current altitude: {relative_alt:.2f} m")
+                self.get_logger().debug(f"Current altitude: {relative_alt:.2f} m")
                 if abs(relative_alt - 10) < 0.5:  # Within 0.5m of target altitude
                     self.get_logger().info("Leader: Takeoff successful")
                     self.takeoff_attempts = 0
