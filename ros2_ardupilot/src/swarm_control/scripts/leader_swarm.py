@@ -16,8 +16,10 @@ def is_position_reached(current_pos, target_pos, tolerance=0.3):
 class LeaderDrone(BaseDrone):
     def __init__(self):
         super().__init__('leader_drone_node', 0, 'udp:localhost:14551')
-        self.position_publisher = self.create_publisher(PoseStamped, '/leader_drone_node/position', 10)
-        self.position_timer = self.create_timer(30, self.publish_position)
+        self.declare_parameter("leader_position_topic", "/leader_drone_node/position")
+        self._leader_pos_topic = self.get_parameter("leader_position_topic").get_parameter_value().string_value
+        self.position_publisher = self.create_publisher(PoseStamped, self._leader_pos_topic, 1)
+
         self.takeoff_complete_publisher = self.create_publisher(Bool, '/leader_takeoff_complete', 10)
         self.waypoints = [
             (10, 0, 10), (10, 10, 10), (0, 10, 10), (-10, 10, 10),
@@ -50,8 +52,7 @@ class LeaderDrone(BaseDrone):
                     self.start_mission()
                     return
             time.sleep(1)
-        self.get_logger().warn("Leader: Takeoff timeout, retrying")
-        self.create_timer(5.0, self.takeoff_with_retry)
+        self.get_logger().info("Leader: Mission Completed")
 
     def start_mission(self):
         self.get_logger().info("Starting mission")
@@ -59,7 +60,7 @@ class LeaderDrone(BaseDrone):
             self.get_logger().info(f"Moving to waypoint {i + 1}: {wp}")
             if self.goto_position(*wp):
                 self.get_logger().info(f"Reached waypoint {i + 1}: {wp}")
-                time.sleep(2)  # Reduced hover time to 2 seconds
+                time.sleep(0.5)  # Reduced hover time to 2 seconds
             else:
                 self.get_logger().error(f"Failed to reach waypoint {i + 1}: {wp}")
                 break
@@ -76,7 +77,9 @@ class LeaderDrone(BaseDrone):
             self.get_logger().warn(f"Not ready to start mission. Current state: {self.state}")
 
     def publish_position(self):
+        self.get_logger().info("Publish position true")
         if self.mav_connection:
+            self.get_logger().info("Publish position true")
             msg = self.mav_connection.recv_match(type='LOCAL_POSITION_NED', blocking=False)
             if msg:
                 pose = PoseStamped()
@@ -105,6 +108,7 @@ class LeaderDrone(BaseDrone):
             msg = self.mav_connection.recv_match(type='LOCAL_POSITION_NED', blocking=True, timeout=1)
             if msg:
                 current_pos = (msg.x, msg.y, -msg.z)
+                self.publish_position()
                 self.get_logger().info(f"Current position: x={current_pos[0]:.2f}, y={current_pos[1]:.2f}, z={current_pos[2]:.2f}")
                 if is_position_reached(current_pos, (x, y, z)):
                     self.get_logger().info(f"Reached position: x={x}, y={y}, z={z}")
@@ -115,20 +119,6 @@ class LeaderDrone(BaseDrone):
 
     def on_armed_success(self):
         self.takeoff_with_retry()
-
-    def takeoff_with_retry(self):
-        if self.takeoff_attempts < self.max_attempts:
-            self.takeoff_attempts += 1
-            self.state = DroneState.TAKING_OFF
-            if self.takeoff(10):
-                self.get_logger().info(f"Leader: Takeoff command accepted")
-                self.monitor_takeoff()
-            else:
-                self.get_logger().warn(f"Leader: Takeoff command failed, attempt {self.takeoff_attempts}")
-                self.create_timer(5.0, self.takeoff_with_retry)
-        else:
-            self.get_logger().error(f"Leader: Failed to takeoff after {self.max_attempts} attempts")
-            self.state = DroneState.ERROR
 
     def log_imu_data(self):
         msg = self.mav_connection.recv_match(type='RAW_IMU', blocking=True, timeout=1)
