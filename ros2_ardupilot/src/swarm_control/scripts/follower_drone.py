@@ -8,6 +8,7 @@ from sensor_msgs.msg import Imu
 import rclpy
 from datetime import datetime
 import time
+from rclpy.callback_groups import ReentrantCallbackGroup
 
 class FollowerDrone(BaseDrone):
     def __init__(self, node_name, drone_id, mavlink_connection, leader_pos_topic, offset, follow_distance):
@@ -57,21 +58,16 @@ class FollowerDrone(BaseDrone):
         self.imu_logger = IMULogger(self,
                                     f'/root/ardu_ws/src/swarm_control/imu_log/imu_data_follower{self.drone_id}_{timestamp}.csv',
                                     f"Follower {self.drone_id}")
-        self.imu_subscription = self.create_subscription(
-            Imu,
-            f'/follower_drone_node_{drone_id}/imu',
-            self.imu_callback,
-            10)
-                
+        self.log_imu_timer = self.create_timer(1,  # Set the interval for logging IMU data (adjust as needed)
+            self.log_imu_data,
+            callback_group=ReentrantCallbackGroup()
+        )
     def create_takeoff_subscription(self):
         try:
             self.takeoff_subscription = self.create_subscription(Bool, '/leader_takeoff_complete', self.leader_takeoff_callback, 10)
         except Exception as e:
             self.get_logger().error(f'Failed to create takeoff subscription: {e}')
             self.takeoff_subscription = None
-
-    def imu_callback(self, msg):
-        self.imu_logger.log_imu_data(msg)
 
     def leader_takeoff_callback(self, msg):
         if msg.data:
@@ -156,7 +152,10 @@ class FollowerDrone(BaseDrone):
         self.get_logger().info(f"Drone{self.drone_id}: Mission Completed")
 
     def log_imu_data(self):
-        msg = self.mav_connection.recv_match(type='RAW_IMU', blocking=False)
+        if not self.mav_connection or not self.mav_connection.target_system:
+            self.get_logger().error("MAVLink connection is not established.")
+            return
+        msg = self.mav_connection.recv_match(type='RAW_IMU', blocking=True, timeout=1)
         if msg:
             self.get_logger().info(f"IMU DATA SAVING FOLLOWER {self.drone_id}")
             self.imu_logger.log_imu_data(msg)
@@ -178,11 +177,14 @@ def main(args=None):
         follow_distance=5.0
     )
 
+    executor = rclpy.executors.MultiThreadedExecutor()
+    executor.add_node(follower)
+
     try:
         if follower.takeoff_subscription:
             follower.get_logger().info('Waiting for takeoff command...')
             while not follower.leader_takeoff_complete:
-                rclpy.spin(follower)
+                executor.spin()
     except KeyboardInterrupt:
         pass
     finally:

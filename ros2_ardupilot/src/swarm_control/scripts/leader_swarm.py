@@ -8,6 +8,7 @@ from log_imu_data import IMULogger
 from std_msgs.msg import Bool
 from sensor_msgs.msg import Imu
 from datetime import datetime
+from rclpy.callback_groups import ReentrantCallbackGroup
 
 def is_position_reached(current_pos, target_pos, tolerance=0.3):
     return all(abs(c - t) < tolerance for c, t in zip(current_pos, target_pos))
@@ -29,11 +30,10 @@ class LeaderDrone(BaseDrone):
         timestamp = now.strftime("%Y-%m-%d_%H-%M-%S")
         self.imu_logger = IMULogger(self, f'/root/ardu_ws/src/swarm_control/imu_log/imu_data_leader_{timestamp}.csv',
                                     "LEADER")
-        self.imu_subscription = self.create_subscription(
-            Imu,
-            '/leader_drone_node/imu',
-            self.imu_callback,
-            10)
+        self.log_imu_timer = self.create_timer(1,  # Set the interval for logging IMU data (adjust as needed)
+            self.log_imu_data,
+            callback_group=ReentrantCallbackGroup()
+        )
 
     def monitor_takeoff(self):
         start_time = time.time()
@@ -93,8 +93,6 @@ class LeaderDrone(BaseDrone):
             else:
                 self.get_logger().warn("Failed to get leader position")
 
-    def imu_callback(self, msg):
-        self.imu_logger.log_imu_data(msg)
 
     def goto_position(self, x, y, z):
         self.get_logger().info(f"Sending goto command: x={x}, y={y}, z={z}")
@@ -121,6 +119,9 @@ class LeaderDrone(BaseDrone):
         self.takeoff_with_retry()
 
     def log_imu_data(self):
+        if not self.mav_connection or not self.mav_connection.target_system:
+            self.get_logger().error("MAVLink connection is not established.")
+            return
         msg = self.mav_connection.recv_match(type='RAW_IMU', blocking=True, timeout=1)
         if msg:
             self.get_logger().info("IMU DATA SAVING LEADER")
@@ -135,8 +136,11 @@ class LeaderDrone(BaseDrone):
 def main(args=None):
     rclpy.init(args=args)
     leader = LeaderDrone()
+    
+    executor = rclpy.executors.MultiThreadedExecutor()
+    executor.add_node(leader)
     try:
-        rclpy.spin(leader)
+        executor.spin()
     except KeyboardInterrupt:
         pass
     finally:
