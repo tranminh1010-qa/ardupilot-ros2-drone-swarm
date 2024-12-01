@@ -84,13 +84,13 @@ class BaseDrone(Node):
             self.state = DroneState.ERROR
             return
 
-        current_mode = self.get_current_mode()
-        if current_mode != 'GUIDED':
-            if not self.set_guided_mode_with_retry():
-                self.state = DroneState.ERROR
-                return
+        # current_mode = self.get_current_mode()
+        # if current_mode != 'GUIDED':
+        #     if not self.set_guided_mode_with_retry():
+        #         self.state = DroneState.ERROR
+                # return
 
-        self.arm_drone_with_retry()
+        # self.arm_drone_with_retry()
 
     def check_ekf_health(self):
         msg = self.mav_connection.recv_match(type='EKF_STATUS_REPORT', blocking=True, timeout=5)
