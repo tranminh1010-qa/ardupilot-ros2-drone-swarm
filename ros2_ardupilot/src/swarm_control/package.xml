@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>swarm_control</name>
+  <version>0.0.0</version>
+  <description>The swarm_control package</description>
+  <maintainer email="maintainer@example.com">Maintainer Name</maintainer>
+  <license>BSD</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>rclpy</depend>
+  <depend>std_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>mavros_msgs</depend>
+  <depend>fastcdr</depend>
+  <depend>ardupilot_sitl</depend>
+  <depend>ardupilot_msgs</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
