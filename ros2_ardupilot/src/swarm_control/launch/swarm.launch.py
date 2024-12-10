@@ -16,7 +16,7 @@ def generate_launch_description():
         sdf_path = os.path.join(bringup_dir, 'models', 'iris_with_ardupilot', 'model.sdf')
         swarm_control_share = get_package_share_directory('swarm_control')
         param_file = "/root/ardu_ws/src/swarm_control/parameters/ardu_gps_noise.parm"
-
+        host_address = '172.17.0.1'
         if not os.path.exists(sdf_path):
             raise FileNotFoundError(f"SDF file not found: {sdf_path}")
 
@@ -24,12 +24,6 @@ def generate_launch_description():
              raise FileNotFoundError(f"Parameter file not found: {param_file}")
 
         print(f"Using parameter file: {param_file}")
-
-        # Launch Gazebo
-        gz_sim = ExecuteProcess(
-            cmd=['gz', 'sim', '-v4', '-r', 'swarm_drone.sdf'],
-            output='screen'
-        )
 
         # Launch ArduPilot SITL instances
         ardupilot_sitl_leader = ExecuteProcess(
@@ -42,10 +36,10 @@ def generate_launch_description():
                 '--instance', '0',
                 '--sysid', '1',
                 '--speedup', '2',
-                '--sim-address=192.168.65.2' ,
+                '--sim-address=' + host_address,  # Modified this line
                 '--custom-location=40.072842,-105.230575,1586,0',
                 '--out=udp:127.0.0.1:14551',
-                '--out=udp:192.168.65.2:14550',
+                ('--out=udp:%s:14550' % host_address),
                 '--add-param-file', param_file,
             ],
             output='screen',
@@ -67,10 +61,10 @@ def generate_launch_description():
                 '--instance', '1',
                 '--sysid', '2',
                 '--speedup', '2',
-                '--sim-address=192.168.65.2' ,
+                '--sim-address=' + host_address,
                 '--custom-location=40.072842,-105.230575,1586,0',
                 '--out=udp:127.0.0.1:14561',
-                '--out=udp:192.168.65.2:14560',
+                ('--out=udp:%s:14560' % host_address),
                 '--add-param-file', param_file,
             ],
             output='screen',
@@ -92,10 +86,10 @@ def generate_launch_description():
                 '--instance', '2',
                 '--sysid', '3',
                 '--speedup', '2',
-                '--sim-address=192.168.65.2' ,
+                 '--sim-address=' + host_address,
                 '--custom-location=40.072842,-105.230575,1586,0',
-                '--out=udp:127.0.0.1:14571',
-                '--out=udp:192.168.65.2:14570',
+                '--out=udp:127.0.0.1:14561',
+                ('--out=udp:%s:14570' % host_address),
                 '--add-param-file', param_file,
             ],
             output='screen',

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import numpy as np
 import rclpy
 from geometry_msgs.msg import PoseStamped
 from pymavlink import mavutil
@@ -10,6 +11,9 @@ from sensor_msgs.msg import Imu
 from datetime import datetime
 from rclpy.callback_groups import ReentrantCallbackGroup
 
+from noise_injector import NoiseInjector
+
+
 def is_position_reached(current_pos, target_pos, tolerance=0.3):
     return all(abs(c - t) < tolerance for c, t in zip(current_pos, target_pos))
 
@@ -20,6 +24,8 @@ class LeaderDrone(BaseDrone):
         self.declare_parameter("leader_position_topic", "/leader_drone_node/position")
         self._leader_pos_topic = self.get_parameter("leader_position_topic").get_parameter_value().string_value
         self.position_publisher = self.create_publisher(PoseStamped, self._leader_pos_topic, 1)
+        self.position_noise = NoiseInjector(mean=0.0, std_dev=0.3, time_correlation=0.8)
+        self.velocity_noise = NoiseInjector(mean=0.0, std_dev=0.1, time_correlation=0.6)
 
         self.takeoff_complete_publisher = self.create_publisher(Bool, '/leader_takeoff_complete', 10)
         self.waypoints = [
@@ -93,26 +99,37 @@ class LeaderDrone(BaseDrone):
             else:
                 self.get_logger().warn("Failed to get leader position")
 
-
     def goto_position(self, x, y, z):
-        self.get_logger().info(f"Sending goto command: x={x}, y={y}, z={z}")
+        self.get_logger().info(f"Original target: x={x}, y={y}, z={z}")
+        noisy_pos = self.apply_noise_to_position(x, y, z)
+        self.get_logger().info(f"Noisy target: x={noisy_pos[0]:.2f}, y={noisy_pos[1]:.2f}, z={noisy_pos[2]:.2f}")
+
         self.mav_connection.mav.set_position_target_local_ned_send(
             0, self.mav_connection.target_system, self.mav_connection.target_component,
             mavutil.mavlink.MAV_FRAME_LOCAL_NED, 0b0000111111111000,
-            x, y, -z, 0, 0, 0, 0, 0, 0, 0, 0)
+            noisy_pos[0], noisy_pos[1], -noisy_pos[2], 0, 0, 0, 0, 0, 0, 0, 0)
 
         start = time.time()
         while time.time() - start < 60:
             msg = self.mav_connection.recv_match(type='LOCAL_POSITION_NED', blocking=True, timeout=1)
             if msg:
                 current_pos = (msg.x, msg.y, -msg.z)
+                target = (x, y, z)
                 self.publish_position()
-                self.get_logger().info(f"Current position: x={current_pos[0]:.2f}, y={current_pos[1]:.2f}, z={current_pos[2]:.2f}")
-                if is_position_reached(current_pos, (x, y, z)):
-                    self.get_logger().info(f"Reached position: x={x}, y={y}, z={z}")
+
+                # Log IMU and position data
+                imu_msg = self.mav_connection.recv_match(type='RAW_IMU', blocking=True, timeout=1)
+                if imu_msg:
+                    self.imu_logger.log_imu_data(imu_msg, current_pos, target)
+
+                # Calculate and log deviation
+                deviation = np.linalg.norm(np.array(current_pos) - np.array(target))
+                self.get_logger().info(f"Position deviation: {deviation:.2f}m")
+
+                if all(abs(c - t) < 0.3 for c, t in zip(current_pos, target)):
                     return True
-            time.sleep(1)
-        self.get_logger().error(f"Failed to reach position: x={x}, y={y}, z={z}")
+
+            time.sleep(0.1)
         return False
 
     def on_armed_success(self):

@@ -7,7 +7,8 @@ from pymavlink import mavutil
 import time
 import csv
 import enum
-
+from noise_injector import NoiseInjector
+import numpy as np
 
 class DroneState(enum.Enum):
     INITIALIZING = 0
@@ -44,6 +45,8 @@ class BaseDrone(Node):
         self.max_attempts = 3
 
         self.connection_timer = self.create_timer(1.0, self.connection_check)
+        self.position_noise = NoiseInjector(mean=0.0, std_dev=0.3, time_correlation=0.8)
+        self.velocity_noise = NoiseInjector(mean=0.0, std_dev=0.1, time_correlation=0.6)
 
     def connection_check(self):
         if self.state != DroneState.CONNECTED:
@@ -51,6 +54,13 @@ class BaseDrone(Node):
         else:
             self.connection_timer.cancel()
             self.post_connection_setup()
+
+    def apply_noise_to_position(self, x, y, z):
+        noise = self.position_noise.generate_noise()
+        noisy_pos = np.array([x, y, z]) + noise
+        deviation = np.linalg.norm(noise)
+        self.get_logger().info(f'Position deviation: {deviation:.2f}m')
+        return tuple(noisy_pos)
 
     def attempt_connect(self):
         try:

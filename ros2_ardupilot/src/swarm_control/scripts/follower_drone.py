@@ -14,7 +14,7 @@ class FollowerDrone(BaseDrone):
     def __init__(self, node_name, drone_id, mavlink_connection, leader_pos_topic, offset, follow_distance):
         super().__init__(node_name, drone_id, mavlink_connection)
 
-        # Declare parame ters
+        # Declare parameters
         self.declare_parameter('drone_id', drone_id)
         self.declare_parameter('mavlink_connection', mavlink_connection)
         self.declare_parameter('leader_pos_topic', leader_pos_topic)
@@ -79,42 +79,40 @@ class FollowerDrone(BaseDrone):
             if self.leader_pos_topic:
                 self.get_logger().info('Intiating Follower mission')
 
-    def leader_position_callback(self, msg: PoseStamped):
-        current_time = self.get_clock().now()
-        time_diff = (current_time - self.get_clock().now().from_msg(msg.header.stamp)).nanoseconds / 1e9
-        self.get_logger().info(f"Position update delay: {time_diff:.2f} seconds")
-        self.leader_position = msg
-        self.get_logger().info(
-            f"Drone {self.drone_id}: Received leader position: x={msg.pose.position.x:.2f}, y={msg.pose.position.y:.2f}, z={msg.pose.position.z:.2f}")
-
+    def leader_position_callback(self, msg):
         if self.state != DroneState.FLYING:
-            self.get_logger().warn(f"Drone {self.drone_id}: Not in FLYING state. Current state: {self.state}")
             return
-
-        current_time = self.get_clock().now()
-        if (current_time - self.last_command_time).nanoseconds / 1e9 < 1.0 / self.command_frequency:
-            return
-
-        self.last_command_time = current_time
 
         target_x = msg.pose.position.x + self.offset[0]
         target_y = msg.pose.position.y + self.offset[1]
         target_z = msg.pose.position.z + self.offset[2]
+        target_pos = (target_x, target_y, target_z)
 
-        self.get_logger().info(
-            f"Drone {self.drone_id}: Calculated target position: {target_x:.2f}, {target_y:.2f}, {target_z:.2f}")
+        # Apply noise to target position
+        noisy_pos = self.apply_noise_to_position(target_x, target_y, target_z)
+        self.get_logger().info(f"Noisy target position: {noisy_pos}")
 
         try:
             self.mav_connection.mav.set_position_target_local_ned_send(
                 0, self.mav_connection.target_system, self.mav_connection.target_component,
                 mavutil.mavlink.MAV_FRAME_LOCAL_NED, 0b0000111111111000,
-                target_x, target_y, -target_z, 0, 0, 0, 0, 0, 0, 0, 0)
-            self.get_logger().info(f"Drone {self.drone_id}: Sent position target command")
+                noisy_pos[0], noisy_pos[1], -noisy_pos[2], 0, 0, 0, 0, 0, 0, 0, 0)
+
+            # Log position and deviation
+            pos_msg = self.mav_connection.recv_match(type='LOCAL_POSITION_NED', blocking=False)
+            if pos_msg:
+                current_pos = (pos_msg.x, pos_msg.y, -pos_msg.z)
+
+                # Log IMU and position data
+                imu_msg = self.mav_connection.recv_match(type='RAW_IMU', blocking=True, timeout=1)
+                if imu_msg:
+                    self.imu_logger.log_imu_data(imu_msg, current_pos, target_pos)
+
+                deviation = np.linalg.norm(np.array(current_pos) - np.array(target_pos))
+                self.get_logger().info(f"Follower {self.drone_id} deviation: {deviation:.2f}m")
+
         except Exception as e:
-            self.get_logger().error(f"Drone {self.drone_id}: Error sending MAVLink message: {str(e)}")
-
-        self.check_current_position()
-
+            self.get_logger().error(f"Error sending MAVLink message: {str(e)}")
     def check_current_position(self):
         msg = self.mav_connection.recv_match(type='LOCAL_POSITION_NED', blocking=False)
         if msg:
