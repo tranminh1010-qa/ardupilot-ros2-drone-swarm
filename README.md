@@ -45,6 +45,7 @@ docker run -it --net=host \
 If you have GPU and Cuda runtime set up on the device, you can also run the following for much faster performance 
 ```bash
 docker run -it --net=host \
+  --add-host=host.docker.internal:host-gateway \
   --name="ardu_gpu" \
   --env="DISPLAY=$DISPLAY" \
   --env="QT_X11_NO_MITSHM=1" \
@@ -68,7 +69,6 @@ docker run -it --net=host \
   --ulimit rtprio=99 \
   --security-opt seccomp=unconfined \
   ardupilot-ros2
-
 ```
 The terminal should hang, to continue, open a new terminal and keep working. 
 

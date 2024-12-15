@@ -17,11 +17,12 @@ def generate_launch_description():
         swarm_control_share = get_package_share_directory('swarm_control')
         param_file = "/root/ardu_ws/src/swarm_control/parameters/ardu_gps_noise.parm"
         host_address = '172.17.0.1'
+
         if not os.path.exists(sdf_path):
             raise FileNotFoundError(f"SDF file not found: {sdf_path}")
 
         if not os.path.exists(param_file):
-             raise FileNotFoundError(f"Parameter file not found: {param_file}")
+            raise FileNotFoundError(f"Parameter file not found: {param_file}")
 
         print(f"Using parameter file: {param_file}")
 
@@ -36,10 +37,10 @@ def generate_launch_description():
                 '--instance', '0',
                 '--sysid', '1',
                 '--speedup', '2',
-                '--sim-address=' + host_address,  # Modified this line
+                '--sim-address=' + host_address,
                 '--custom-location=40.072842,-105.230575,1586,0',
-                '--out=udp:127.0.0.1:14551',
-                ('--out=udp:%s:14550' % host_address),
+                '--out=udp:127.0.0.1:14551',  # Local connection for ROS
+                '--out=udp:172.17.0.1:14550',  # Connection to Gazebo
                 '--add-param-file', param_file,
             ],
             output='screen',
@@ -63,8 +64,8 @@ def generate_launch_description():
                 '--speedup', '2',
                 '--sim-address=' + host_address,
                 '--custom-location=40.072842,-105.230575,1586,0',
-                '--out=udp:127.0.0.1:14561',
-                ('--out=udp:%s:14560' % host_address),
+                '--out=udp:127.0.0.1:14561',  # Local connection for ROS
+                '--out=udp:172.17.0.1:14560',  # Connection to Gazebo
                 '--add-param-file', param_file,
             ],
             output='screen',
@@ -86,10 +87,10 @@ def generate_launch_description():
                 '--instance', '2',
                 '--sysid', '3',
                 '--speedup', '2',
-                 '--sim-address=' + host_address,
+                '--sim-address=' + host_address,
                 '--custom-location=40.072842,-105.230575,1586,0',
-                '--out=udp:127.0.0.1:14561',
-                ('--out=udp:%s:14570' % host_address),
+                '--out=udp:127.0.0.1:14571',  # Changed to unique port for ROS
+                '--out=udp:172.17.0.1:14570',  # Connection to Gazebo
                 '--add-param-file', param_file,
             ],
             output='screen',
@@ -101,13 +102,20 @@ def generate_launch_description():
             }
         )
 
-        # ROS-Gazebo bridge
+        # ROS-Gazebo bridge with reliable QoS
+        qos_profile = QoSProfile(
+            reliability=ReliabilityPolicy.RELIABLE,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=10
+        )
+
         bridge = GroupAction([
             Node(
                 package='ros_gz_bridge',
                 executable='parameter_bridge',
                 arguments=['/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock'],
-                output='screen'
+                output='screen',
+                parameters=[{'qos_overrides./clock.reliability': 'reliable'}]
             ),
             Node(
                 package='ros_gz_bridge',
@@ -120,7 +128,8 @@ def generate_launch_description():
                     '/model/follower_drone2/pose@geometry_msgs/msg/Pose@gz.msgs.Pose',
                     '/model/follower_drone2/cmd_vel@geometry_msgs/msg/Twist@gz.msgs.Twist',
                 ],
-                output='screen'
+                output='screen',
+                parameters=[{'qos_override.*/reliability': 'reliable'}]
             )
         ])
 
@@ -133,10 +142,13 @@ def generate_launch_description():
             parameters=[{
                 'drone_id': 0,
                 'mavlink_connection': 'udp:localhost:14551',
+                'connection_retry_attempts': 5,
+                'connection_timeout': 10.0
             }],
             remappings=[('/leader_drone_node/position', '/leader_position')],
         )
 
+        # Follower drone nodes with corrected ports
         follower_node1 = Node(
             package='swarm_control',
             executable='follower_drone.py',
@@ -147,7 +159,9 @@ def generate_launch_description():
                 'mavlink_connection': 'udp:localhost:14561',
                 'leader_pos_topic': '/leader_position',
                 'offset': [-2.0, -2.0, 0.0],
-                'follow_distance': 7.0
+                'follow_distance': 7.0,
+                'connection_retry_attempts': 5,
+                'connection_timeout': 10.0
             }],
         )
 
@@ -158,25 +172,27 @@ def generate_launch_description():
             output='screen',
             parameters=[{
                 'drone_id': 2,
-                'mavlink_connection': 'udp:localhost:14571',
+                'mavlink_connection': 'udp:localhost:14571',  # Updated to match SITL port
                 'leader_pos_topic': '/leader_position',
                 'offset': [-2.0, 2.0, 0.0],
-                'follow_distance': 7.0
+                'follow_distance': 7.0,
+                'connection_retry_attempts': 5,
+                'connection_timeout': 10.0
             }],
         )
 
+        # Construct launch description with appropriate delays
         return LaunchDescription([
-            # gz_sim,
             LogInfo(msg="Starting SITL instances..."),
             TimerAction(period=5.0, actions=[ardupilot_sitl_leader]),
-            TimerAction(period=7.0, actions=[ardupilot_sitl_follower1]),
-            TimerAction(period=10.0, actions=[ardupilot_sitl_follower2]),
-            LogInfo(msg="Spawning drones in Gazebo..."),
-            TimerAction(period=12.0, actions=[bridge]),
+            TimerAction(period=10.0, actions=[ardupilot_sitl_follower1]),
+            TimerAction(period=15.0, actions=[ardupilot_sitl_follower2]),
+            LogInfo(msg="Starting ROS-Gazebo bridge..."),
+            TimerAction(period=20.0, actions=[bridge]),
             LogInfo(msg="Starting ROS nodes..."),
-            TimerAction(period=30.0, actions=[leader_node]),
-            TimerAction(period=32.0, actions=[follower_node1]),
-            TimerAction(period=34.0, actions=[follower_node2])
+            TimerAction(period=35.0, actions=[leader_node]),
+            TimerAction(period=40.0, actions=[follower_node1]),
+            TimerAction(period=45.0, actions=[follower_node2])
         ])
     except Exception as e:
         print(f"Error in launch file: {str(e)}")

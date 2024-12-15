@@ -21,6 +21,8 @@ def is_position_reached(current_pos, target_pos, tolerance=0.3):
 class LeaderDrone(BaseDrone):
     def __init__(self):
         super().__init__('leader_drone_node', 0, 'udp:localhost:14551')
+        self.current_position = None
+        self.target_position = None
         self.declare_parameter("leader_position_topic", "/leader_drone_node/position")
         self._leader_pos_topic = self.get_parameter("leader_position_topic").get_parameter_value().string_value
         self.position_publisher = self.create_publisher(PoseStamped, self._leader_pos_topic, 1)
@@ -136,18 +138,38 @@ class LeaderDrone(BaseDrone):
         self.takeoff_with_retry()
 
     def log_imu_data(self):
+        """Timer callback for logging IMU data"""
         if not self.mav_connection or not self.mav_connection.target_system:
             self.get_logger().error("MAVLink connection is not established.")
             return
-        msg = self.mav_connection.recv_match(type='RAW_IMU', blocking=True, timeout=1)
-        if msg:
-            self.get_logger().info("IMU DATA SAVING LEADER")
-            self.imu_logger.log_imu_data(msg)
-        else:
-            self.get_logger().error("No IMU Data")
+
+        try:
+            # Get current position
+            pos_msg = self.mav_connection.recv_match(type='LOCAL_POSITION_NED', blocking=False)
+            if pos_msg:
+                self.current_position = (pos_msg.x, pos_msg.y, -pos_msg.z)
+
+            # Get IMU data
+            imu_msg = self.mav_connection.recv_match(type='RAW_IMU', blocking=True, timeout=1)
+
+            if imu_msg and self.current_position:
+                self.get_logger().info(f"IMU DATA SAVING LEADER {self.drone_id}")
+                self.imu_logger.log_imu_data(
+                    imu_msg,
+                    self.current_position,
+                    self.target_position if self.target_position else self.current_position
+                )
+            else:
+                if not imu_msg:
+                    self.get_logger().warn(f"No IMU Data for Leader {self.drone_id}")
+                if not self.current_position:
+                    self.get_logger().warn(f"No position data available for Leader {self.drone_id}")
+
+        except Exception as e:
+            self.get_logger().error(f"Error in IMU logging: {str(e)}")
 
     def __del__(self):
-        if hasattr(self, 'imu_logger'):
+        if hasattr(self, 'imu_logger') and self.imu_logger is not None:
             self.imu_logger.close()
 
 def main(args=None):
