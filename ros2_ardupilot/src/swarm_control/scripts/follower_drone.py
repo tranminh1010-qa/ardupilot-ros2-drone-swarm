@@ -71,6 +71,9 @@ class FollowerDrone(BaseDrone):
         # Store last known position and target
         self.current_position = None
         self.target_position = None
+        # Add artificial lag
+        self.position_buffer = []
+        self.lag_duration = 0.5  # 500ms lag
 
     def create_takeoff_subscription(self):
         try:
@@ -95,14 +98,27 @@ class FollowerDrone(BaseDrone):
         if self.state != DroneState.FLYING:
             return
 
-        target_x = msg.pose.position.x + self.offset[0]
-        target_y = msg.pose.position.y + self.offset[1]
-        target_z = msg.pose.position.z + self.offset[2]
-        target_pos = (target_x, target_y, target_z)
+        # Store incoming position with timestamp
+        current_time = time.time()
+        self.position_buffer.append((current_time, msg))
 
-        # Apply noise to target position
+        # Remove old positions
+        while self.position_buffer and current_time - self.position_buffer[0][0] > self.lag_duration:
+            self.position_buffer.pop(0)
+
+        # If we have positions in buffer, use the oldest one
+        if not self.position_buffer:
+            return
+
+        _, lagged_msg = self.position_buffer[0]
+
+        # Calculate target position with offset
+        target_x = lagged_msg.pose.position.x + self.offset[0]
+        target_y = lagged_msg.pose.position.y + self.offset[1]
+        target_z = lagged_msg.pose.position.z + self.offset[2]
+
+        # Apply noise and send command
         noisy_pos = self.apply_noise_to_position(target_x, target_y, target_z)
-        self.get_logger().info(f"Noisy target position: {noisy_pos}")
 
         try:
             self.mav_connection.mav.set_position_target_local_ned_send(
@@ -110,18 +126,11 @@ class FollowerDrone(BaseDrone):
                 mavutil.mavlink.MAV_FRAME_LOCAL_NED, 0b0000111111111000,
                 noisy_pos[0], noisy_pos[1], -noisy_pos[2], 0, 0, 0, 0, 0, 0, 0, 0)
 
-            # Log position and deviation
+            # Update current position for logging
             pos_msg = self.mav_connection.recv_match(type='LOCAL_POSITION_NED', blocking=False)
             if pos_msg:
-                current_pos = (pos_msg.x, pos_msg.y, -pos_msg.z)
-
-                # Log IMU and position data
-                imu_msg = self.mav_connection.recv_match(type='RAW_IMU', blocking=True, timeout=1)
-                if imu_msg:
-                    self.imu_logger.log_imu_data(imu_msg, current_pos, target_pos)
-
-                deviation = np.linalg.norm(np.array(current_pos) - np.array(target_pos))
-                self.get_logger().info(f"Follower {self.drone_id} deviation: {deviation:.2f}m")
+                self.current_position = (pos_msg.x, pos_msg.y, -pos_msg.z)
+                self.target_position = (target_x, target_y, target_z)
 
         except Exception as e:
             self.get_logger().error(f"Error sending MAVLink message: {str(e)}")

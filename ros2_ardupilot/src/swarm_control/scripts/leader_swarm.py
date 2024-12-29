@@ -30,10 +30,17 @@ class LeaderDrone(BaseDrone):
         self.velocity_noise = NoiseInjector(mean=0.0, std_dev=0.1, time_correlation=0.6)
 
         self.takeoff_complete_publisher = self.create_publisher(Bool, '/leader_takeoff_complete', 10)
-        self.waypoints = [
-            (10, 0, 10), (10, 10, 10), (0, 10, 10), (-10, 10, 10),
-            (-10, -10, 10), (10, -10, 10), (10, 0, 20), (0, 0, 20), (0, 0, 10)
-        ]
+        radius = 30.0
+        height = 8.0
+        points = 12  # Number of points in the circle
+
+        self.waypoints = []
+        for i in range(points):
+            angle = 2 * np.pi * i / points
+            x = radius * np.cos(angle)
+            y = radius * np.sin(angle)
+            self.waypoints.append((x, y, height))
+
         now = datetime.now()
         timestamp = now.strftime("%Y-%m-%d_%H-%M-%S")
         self.imu_logger = IMULogger(self, f'/root/ardu_ws/src/swarm_control/imu_log/imu_data_leader_{timestamp}.csv',
@@ -42,98 +49,148 @@ class LeaderDrone(BaseDrone):
             self.log_imu_data,
             callback_group=ReentrantCallbackGroup()
         )
+        self.position_publish_timer = self.create_timer(0.1, self.publish_position)  # 10Hz publishing rate
 
     def monitor_takeoff(self):
         start_time = time.time()
-        while time.time() - start_time < 30:  # Wait up to 30 seconds
+        reached_altitude = False
+
+        while time.time() - start_time < 30:  # 30 second timeout
             msg = self.mav_connection.recv_match(type='GLOBAL_POSITION_INT', blocking=True, timeout=1)
             if msg:
                 relative_alt = msg.relative_alt / 1000.0  # Convert mm to m
-                self.get_logger().debug(f"Current altitude: {relative_alt:.2f} m")
+                self.get_logger().info(f"Current altitude: {relative_alt:.2f} m")
+
                 if abs(relative_alt - 10) < 0.5:  # Within 0.5m of target altitude
-                    self.get_logger().info("Leader: Takeoff successful")
-                    self.takeoff_attempts = 0
-                    self.state = DroneState.FLYING
-                    takeoff_complete_msg = Bool()
-                    takeoff_complete_msg.data = True
-                    self.takeoff_complete_publisher.publish(takeoff_complete_msg)
-                    self.start_mission()
-                    return
-            time.sleep(1)
-        self.get_logger().info("Leader: Mission Completed")
+                    reached_altitude = True
+                    break
+
+            time.sleep(0.1)
+
+        if reached_altitude:
+            self.get_logger().info("Leader: Takeoff successful")
+            self.state = DroneState.FLYING
+            self.publish_takeoff_complete()
+            time.sleep(2)  # Allow time for stabilization
+            self.start_mission()
+            return True
+        else:
+            self.get_logger().error("Leader: Failed to reach takeoff altitude")
+            return False
+
+    def publish_takeoff_complete(self):
+        msg = Bool()
+        msg.data = True
+        self.takeoff_complete_publisher.publish(msg)
+        self.get_logger().info("Published takeoff complete message")
 
     def start_mission(self):
-        self.get_logger().info("Starting mission")
-        for i, wp in enumerate(self.waypoints):
-            self.get_logger().info(f"Moving to waypoint {i + 1}: {wp}")
-            if self.goto_position(*wp):
-                self.get_logger().info(f"Reached waypoint {i + 1}: {wp}")
-                time.sleep(0.5)  # Reduced hover time to 2 seconds
-            else:
-                self.get_logger().error(f"Failed to reach waypoint {i + 1}: {wp}")
-                break
-        self.get_logger().info("Mission completed")
+        if self.state != DroneState.FLYING:
+            return
 
-    def start_mission_timer_callback(self):
-        if self.state == DroneState.CONNECTED:
-            self.get_logger().info("Starting mission setup and arming process")
-            self.setup_and_arm()
-            if not self.ekf_check_timer:
-                self.ekf_check_timer = self.create_timer(1.0, self.check_ekf_health)
-            self.mission_start_timer.cancel()
-        else:
-            self.get_logger().warn(f"Not ready to start mission. Current state: {self.state}")
+        # First stabilize at initial position
+        initial_pos = (0, 0, 10)
+        self.goto_position(*initial_pos)
+
+        current_waypoint = 0
+        while self.state == DroneState.FLYING:
+            wp = self.waypoints[current_waypoint]
+            self.target_position = wp
+            self.send_position_command(*wp)
+
+            # Check if we're close enough to current waypoint
+            msg = self.mav_connection.recv_match(type='LOCAL_POSITION_NED', blocking=True, timeout=1)
+            if msg:
+                current_pos = (msg.x, msg.y, -msg.z)
+                distance = np.linalg.norm(np.array(current_pos) - np.array(wp))
+
+                # If we're within 1 meter of the waypoint, move to next one
+                if distance < 1.0:
+                    current_waypoint = (current_waypoint + 1) % len(self.waypoints)
+                    time.sleep(0.5)  # Brief pause at waypoint
+
+            time.sleep(0.1)  # Control rate
+
+    def send_position_command(self, x, y, z):
+        try:
+            noisy_pos = self.apply_noise_to_position(x, y, z)
+            self.mav_connection.mav.set_position_target_local_ned_send(
+                0,
+                self.mav_connection.target_system,
+                self.mav_connection.target_component,
+                mavutil.mavlink.MAV_FRAME_LOCAL_NED,
+                0b0000111111111000,
+                noisy_pos[0], noisy_pos[1], -noisy_pos[2],
+                0, 0, 0,  # velocity
+                0, 0, 0,  # acceleration
+                0, 0  # yaw
+            )
+            self.publish_position()
+
+        except Exception as e:
+            self.get_logger().error(f"MAVLink command failed: {str(e)}")
 
     def publish_position(self):
-        self.get_logger().info("Publish position true")
-        if self.mav_connection:
-            self.get_logger().info("Publish position true")
-            msg = self.mav_connection.recv_match(type='LOCAL_POSITION_NED', blocking=False)
+        if not self.mav_connection or self.state != DroneState.FLYING:
+            return
+
+        try:
+            msg = self.mav_connection.recv_match(type='LOCAL_POSITION_NED', blocking=True, timeout=0.1)
             if msg:
                 pose = PoseStamped()
                 pose.header.stamp = self.get_clock().now().to_msg()
                 pose.header.frame_id = "map"
                 pose.pose.position.x = msg.x
                 pose.pose.position.y = msg.y
-                pose.pose.position.z = -msg.z  # NED to ENU conversion
+                pose.pose.position.z = -msg.z
                 self.position_publisher.publish(pose)
-                self.get_logger().info(f"Published leader position: x={msg.x:.2f}, y={msg.y:.2f}, z={-msg.z:.2f}")
-            else:
-                self.get_logger().warn("Failed to get leader position")
+
+                # Request position data more frequently
+                self.mav_connection.mav.request_data_stream_send(
+                    self.mav_connection.target_system,
+                    self.mav_connection.target_component,
+                    mavutil.mavlink.MAV_DATA_STREAM_POSITION,
+                    20,  # 20 Hz
+                    1  # Start sending
+                )
+        except Exception as e:
+            self.get_logger().error(f"Error publishing position: {str(e)}")
 
     def goto_position(self, x, y, z):
+        if self.state != DroneState.FLYING:
+            self.get_logger().error("Cannot goto position - drone not in FLYING state")
+            return False
+
         self.get_logger().info(f"Original target: x={x}, y={y}, z={z}")
         noisy_pos = self.apply_noise_to_position(x, y, z)
-        self.get_logger().info(f"Noisy target: x={noisy_pos[0]:.2f}, y={noisy_pos[1]:.2f}, z={noisy_pos[2]:.2f}")
 
-        self.mav_connection.mav.set_position_target_local_ned_send(
-            0, self.mav_connection.target_system, self.mav_connection.target_component,
-            mavutil.mavlink.MAV_FRAME_LOCAL_NED, 0b0000111111111000,
-            noisy_pos[0], noisy_pos[1], -noisy_pos[2], 0, 0, 0, 0, 0, 0, 0, 0)
+        try:
+            self.mav_connection.mav.set_position_target_local_ned_send(
+                0, self.mav_connection.target_system, self.mav_connection.target_component,
+                mavutil.mavlink.MAV_FRAME_LOCAL_NED, 0b0000111111111000,
+                noisy_pos[0], noisy_pos[1], -noisy_pos[2], 0, 0, 0, 0, 0, 0, 0, 0)
 
+            # Wait for position to be reached
+            return self.wait_for_position(x, y, z)
+        except Exception as e:
+            self.get_logger().error(f"Error sending position command: {str(e)}")
+            return False
+
+    def wait_for_position(self, x, y, z, timeout=60, tolerance=0.3):
         start = time.time()
-        while time.time() - start < 60:
+        while time.time() - start < timeout:
             msg = self.mav_connection.recv_match(type='LOCAL_POSITION_NED', blocking=True, timeout=1)
             if msg:
                 current_pos = (msg.x, msg.y, -msg.z)
-                target = (x, y, z)
                 self.publish_position()
 
-                # Log IMU and position data
-                imu_msg = self.mav_connection.recv_match(type='RAW_IMU', blocking=True, timeout=1)
-                if imu_msg:
-                    self.imu_logger.log_imu_data(imu_msg, current_pos, target)
-
-                # Calculate and log deviation
-                deviation = np.linalg.norm(np.array(current_pos) - np.array(target))
+                deviation = np.linalg.norm(np.array(current_pos) - np.array((x, y, z)))
                 self.get_logger().info(f"Position deviation: {deviation:.2f}m")
 
-                if all(abs(c - t) < 0.3 for c, t in zip(current_pos, target)):
+                if deviation < tolerance:
                     return True
-
             time.sleep(0.1)
         return False
-
     def on_armed_success(self):
         self.takeoff_with_retry()
 
