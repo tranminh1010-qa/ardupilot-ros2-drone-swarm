@@ -275,6 +275,55 @@ class BaseDrone(Node):
             self.get_logger().error(f"Drone: {self.drone_id} Failed to takeoff after {self.max_attempts} attempts")
             self.state = DroneState.ERROR
 
+    def log_imu_data(self):
+        """Timer callback for logging IMU data"""
+        if not self.mav_connection or not self.mav_connection.target_system:
+            self.get_logger().error("MAVLink connection is not established.")
+            return
+
+        try:
+            # Request fresh IMU data
+            self.mav_connection.mav.request_data_stream_send(
+                self.mav_connection.target_system,
+                self.mav_connection.target_component,
+                mavutil.mavlink.MAV_DATA_STREAM_RAW_SENSORS,
+                50,  # 50 Hz
+                1
+            )
+
+            # Get current position with shorter timeout
+            pos_msg = self.mav_connection.recv_match(
+                type='LOCAL_POSITION_NED',
+                blocking=True,
+                timeout=0.1
+            )
+
+            if pos_msg:
+                self.current_position = (pos_msg.x, pos_msg.y, -pos_msg.z)
+            else:
+                self.get_logger().warn(f"No position data available for Leader {self.drone_id}")
+                return
+
+            # Get IMU data with shorter timeout
+            imu_msg = self.mav_connection.recv_match(
+                type='RAW_IMU',
+                blocking=True,
+                timeout=0.1
+            )
+
+            if imu_msg:
+                self.get_logger().info(f"IMU DATA SAVING LEADER {self.drone_id}")
+                self.imu_logger.log_imu_data(
+                    imu_msg,
+                    self.current_position,
+                    self.target_position if self.target_position else self.current_position
+                )
+            else:
+                self.get_logger().warn(f"No IMU Data for Leader {self.drone_id}")
+
+        except Exception as e:
+            self.get_logger().error(f"Error in IMU logging: {str(e)}")
+
     def monitor_takeoff(self):
         start_time = time.time()
         while time.time() - start_time < 30:  # Monitor for 30 seconds

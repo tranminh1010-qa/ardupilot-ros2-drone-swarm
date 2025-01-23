@@ -178,8 +178,8 @@ ENV XDG_CONFIG_HOME=/root/.config
 ENV XDG_CACHE_HOME=/root/.cache
 ENV XDG_DATA_HOME=/root/.local/share
 # Set the GZ_SIM_RESOURCE_PATH environment variables
-ENV GZ_SIM_RESOURCE_PATH=$GZ_SIM_RESOURCE_PATH:/root/ardu_ws/src/custom_gz/models
-ENV GZ_SIM_RESOURCE_PATH=$GZ_SIM_RESOURCE_PATH:/root/ardu_ws/src/custom_gz/worlds
+ENV GZ_SIM_RESOURCE_PATH=/root/ardu_ws/src/custom_gz/models
+
 
 RUN mkdir -p $XDG_RUNTIME_DIR && chmod 700 $XDG_RUNTIME_DIR
 

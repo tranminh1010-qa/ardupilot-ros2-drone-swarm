@@ -45,11 +45,46 @@ class LeaderDrone(BaseDrone):
         timestamp = now.strftime("%Y-%m-%d_%H-%M-%S")
         self.imu_logger = IMULogger(self, f'/root/ardu_ws/src/swarm_control/imu_log/imu_data_leader_{timestamp}.csv',
                                     "LEADER")
-        self.log_imu_timer = self.create_timer(1,  # Set the interval for logging IMU data (adjust as needed)
+        self.log_imu_timer = self.create_timer(0.1,
             self.log_imu_data,
             callback_group=ReentrantCallbackGroup()
         )
         self.position_publish_timer = self.create_timer(0.1, self.publish_position)  # 10Hz publishing rate
+        self.setup_data_streams_timer = self.create_timer(1.0, self.setup_data_streams)
+        self.streams_configured = False
+
+    def setup_data_streams(self):
+        """Configure MAVLink data streams with appropriate rates."""
+        if not self.mav_connection or not self.mav_connection.target_system:
+            return
+
+        try:
+            # Configure streams with higher rates
+            streams = {
+                mavutil.mavlink.MAV_DATA_STREAM_RAW_SENSORS: 50,  # IMU data
+                mavutil.mavlink.MAV_DATA_STREAM_POSITION: 50,  # Position data
+                mavutil.mavlink.MAV_DATA_STREAM_EXTRA1: 50,  # Attitude data
+                mavutil.mavlink.MAV_DATA_STREAM_EXTENDED_STATUS: 50,
+                mavutil.mavlink.MAV_DATA_STREAM_RC_CHANNELS: 50,
+            }
+
+            for stream_id, rate in streams.items():
+                self.mav_connection.mav.request_data_stream_send(
+                    self.mav_connection.target_system,
+                    self.mav_connection.target_component,
+                    stream_id,
+                    rate,  # Hz
+                    1  # Start sending
+                )
+
+            self.streams_configured = True
+            self.get_logger().info("MAVLink data streams configured successfully")
+
+            # Once configured, stop the timer
+            self.setup_data_streams_timer.cancel()
+
+        except Exception as e:
+            self.get_logger().error(f"Error configuring data streams: {str(e)}")
 
     def monitor_takeoff(self):
         start_time = time.time()
@@ -135,7 +170,21 @@ class LeaderDrone(BaseDrone):
             return
 
         try:
-            msg = self.mav_connection.recv_match(type='LOCAL_POSITION_NED', blocking=True, timeout=0.1)
+            # Request position data explicitly
+            self.mav_connection.mav.request_data_stream_send(
+                self.mav_connection.target_system,
+                self.mav_connection.target_component,
+                mavutil.mavlink.MAV_DATA_STREAM_POSITION,
+                50,  # 50 Hz
+                1
+            )
+
+            msg = self.mav_connection.recv_match(
+                type='LOCAL_POSITION_NED',
+                blocking=True,
+                timeout=0.1
+            )
+
             if msg:
                 pose = PoseStamped()
                 pose.header.stamp = self.get_clock().now().to_msg()
@@ -145,14 +194,6 @@ class LeaderDrone(BaseDrone):
                 pose.pose.position.z = -msg.z
                 self.position_publisher.publish(pose)
 
-                # Request position data more frequently
-                self.mav_connection.mav.request_data_stream_send(
-                    self.mav_connection.target_system,
-                    self.mav_connection.target_component,
-                    mavutil.mavlink.MAV_DATA_STREAM_POSITION,
-                    20,  # 20 Hz
-                    1  # Start sending
-                )
         except Exception as e:
             self.get_logger().error(f"Error publishing position: {str(e)}")
 
@@ -194,36 +235,6 @@ class LeaderDrone(BaseDrone):
     def on_armed_success(self):
         self.takeoff_with_retry()
 
-    def log_imu_data(self):
-        """Timer callback for logging IMU data"""
-        if not self.mav_connection or not self.mav_connection.target_system:
-            self.get_logger().error("MAVLink connection is not established.")
-            return
-
-        try:
-            # Get current position
-            pos_msg = self.mav_connection.recv_match(type='LOCAL_POSITION_NED', blocking=False)
-            if pos_msg:
-                self.current_position = (pos_msg.x, pos_msg.y, -pos_msg.z)
-
-            # Get IMU data
-            imu_msg = self.mav_connection.recv_match(type='RAW_IMU', blocking=True, timeout=1)
-
-            if imu_msg and self.current_position:
-                self.get_logger().info(f"IMU DATA SAVING LEADER {self.drone_id}")
-                self.imu_logger.log_imu_data(
-                    imu_msg,
-                    self.current_position,
-                    self.target_position if self.target_position else self.current_position
-                )
-            else:
-                if not imu_msg:
-                    self.get_logger().warn(f"No IMU Data for Leader {self.drone_id}")
-                if not self.current_position:
-                    self.get_logger().warn(f"No position data available for Leader {self.drone_id}")
-
-        except Exception as e:
-            self.get_logger().error(f"Error in IMU logging: {str(e)}")
 
     def __del__(self):
         if hasattr(self, 'imu_logger') and self.imu_logger is not None:

@@ -171,37 +171,6 @@ class FollowerDrone(BaseDrone):
             time.sleep(1)
         self.get_logger().info(f"Drone{self.drone_id}: Mission Completed")
 
-    def log_imu_data(self):
-        """Timer callback for logging IMU data"""
-        if not self.mav_connection or not self.mav_connection.target_system:
-            self.get_logger().error("MAVLink connection is not established.")
-            return
-
-        try:
-            # Get current position
-            pos_msg = self.mav_connection.recv_match(type='LOCAL_POSITION_NED', blocking=False)
-            if pos_msg:
-                self.current_position = (pos_msg.x, pos_msg.y, -pos_msg.z)
-
-            # Get IMU data
-            imu_msg = self.mav_connection.recv_match(type='RAW_IMU', blocking=True, timeout=1)
-
-            if imu_msg and self.current_position:
-                self.get_logger().info(f"IMU DATA SAVING FOLLOWER {self.drone_id}")
-                self.imu_logger.log_imu_data(
-                    imu_msg,
-                    self.current_position,
-                    self.target_position if self.target_position else self.current_position
-                )
-            else:
-                if not imu_msg:
-                    self.get_logger().warn(f"No IMU Data for Follower {self.drone_id}")
-                if not self.current_position:
-                    self.get_logger().warn(f"No position data available for Follower {self.drone_id}")
-
-        except Exception as e:
-            self.get_logger().error(f"Error in IMU logging: {str(e)}")
-
     def __del__(self):
         if hasattr(self, 'imu_logger') and self.imu_logger is not None:
             self.imu_logger.close()
