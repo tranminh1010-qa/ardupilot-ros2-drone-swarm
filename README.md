@@ -152,34 +152,28 @@ pkill -f mavproxy
 
 # 8. Swarm Drone Simulation Setup
 
-### Update Your Repository
+### 8.1 Update Your Repository
 Ensure your repository is up to date before proceeding.
 
-### File Setup
+### 8.2 File Setup
 Navigate to your repository folder and move the required files:
 
-#### Copy World File
+#### 8.2.1 Copy World File
 ```bash
 cd custom_gz/worlds
 cp swarm_drone.sdf ~/ardu_ws/src/ardupilot_gazebo/worlds/
 ```
 
-##### Copy Model Folder
+##### 8.2.2 Copy Model Folder
 ```bash
 cd custom_gz/models
 cp -r drone4 ~/ardu_ws/src/ardupilot_gazebo/models/
 ```
 
-## 9. Launch Gazebo Simulation
-Open a terminal and execute the following command to start Gazebo:
-```bash
-gz sim -v4 -r swarm_drone.sdf
-```
-
-## 10. Building Packages
+## 9. Building Packages
 Follow these steps inside the Ubuntu terminal:
 
-### Build ArduPilot Gazebo Package
+### 9.1 Build ArduPilot Gazebo Package
 ```bash
 cd ~/ardu_ws
 colcon build --packages-select ardupilot_gazebo
@@ -195,7 +189,7 @@ cd ../launch
 chmod +x decentralized_swarm.launch.py
 ```
 
-### Build Swarm Control Package
+### 9.2 Build Swarm Control Package
 ```bash
 cd ~/ardu_ws
 colcon build --packages-select swarm_control
@@ -203,8 +197,13 @@ source install/setup.bash
 colcon build --packages-select swarm_control --symlink-install
 source install/setup.bash
 ```
-
-## 10. Launch the Swarm Control
+## 10. Launch Simulation
+### 10.1 Launch Gazebo
+Open a ubuntu terminal and execute the following command to start Gazebo:
+```bash
+gz sim -v4 -r swarm_drone.sdf
+```
+### 10.2 Launch the Swarm Control
 ```bash
 ros2 launch swarm_control decentralized_swarm.launch.py
 ```
