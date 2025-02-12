@@ -148,9 +148,9 @@ Now, we check if it is a permission issue. Close down all running operations, an
 pkill -f arducopter
 pkill -f mavproxy
 . ~/.profile
+```
 
-
-# Swarm Drone Simulation Setup
+#### 8.Swarm Drone Simulation Setup
 
 ## Update Your Repository
 Ensure your repository is up to date before proceeding.
@@ -170,13 +170,13 @@ cd custom_gz/models
 cp -r drone4 ~/ardu_ws/src/ardupilot_gazebo/models/
 ```
 
-## Launch Gazebo Simulation
+## 9. Launch Gazebo Simulation
 Open a terminal and execute the following command to start Gazebo:
 ```bash
 gz sim -v4 -r swarm_drone.sdf
 ```
 
-## Build and Source in Docker Terminal
+## 10. Build and Source in Docker Terminal
 Follow these steps inside the Docker terminal:
 
 ### Build ArduPilot Gazebo Package
@@ -204,7 +204,7 @@ colcon build --packages-select swarm_control --symlink-install
 source install/setup.bash
 ```
 
-## Launch the Swarm Control
+## 10. Launch the Swarm Control
 ```bash
 ros2 launch swarm_control decentralized_swarm.launch.py
 ```
