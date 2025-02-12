@@ -150,21 +150,21 @@ pkill -f mavproxy
 . ~/.profile
 ```
 
-#### 8.Swarm Drone Simulation Setup
+## 8.Swarm Drone Simulation Setup
 
-## Update Your Repository
+### Update Your Repository
 Ensure your repository is up to date before proceeding.
 
-## File Setup
+### File Setup
 Navigate to your repository folder and move the required files:
 
-### Copy World File
+#### Copy World File
 ```bash
 cd custom_gz/worlds
 cp swarm_drone.sdf ~/ardu_ws/src/ardupilot_gazebo/worlds/
 ```
 
-### Copy Model Folder
+##### Copy Model Folder
 ```bash
 cd custom_gz/models
 cp -r drone4 ~/ardu_ws/src/ardupilot_gazebo/models/
@@ -176,8 +176,8 @@ Open a terminal and execute the following command to start Gazebo:
 gz sim -v4 -r swarm_drone.sdf
 ```
 
-## 10. Build and Source in Docker Terminal
-Follow these steps inside the Docker terminal:
+## 10. Building Packages
+Follow these steps inside the Ubuntu terminal:
 
 ### Build ArduPilot Gazebo Package
 ```bash
@@ -185,7 +185,7 @@ cd ~/ardu_ws
 colcon build --packages-select ardupilot_gazebo
 source install/setup.bash
 ```
-
+Follow these steps inside the Docker terminal:
 ### Set Up Scripts and Launch Files
 ```bash
 cd ~/ardu_ws/src/swarm_control/scripts
