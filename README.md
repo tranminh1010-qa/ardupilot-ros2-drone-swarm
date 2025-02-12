@@ -208,5 +208,18 @@ gz sim -v4 -r swarm_drone.sdf
 ros2 launch swarm_control decentralized_swarm.launch.py
 ```
 
-
+## 11. Test Custom SITL Binary
+To run a test if the custom SITL binary is working along with the custom parameters, you first need to start and enter the docker container by running these commands:
+ ```bash
+docker container start ardupilot-ros2
+docker container exec -it ardupilot-ros2 /bin/bash
 ```
+
+Then navigate to the testing script directory inside the docker container and run the testing script:
+```bash
+cd /root/ardu_ws/src/swarm_control/custom-files
+./run-test.sh
+```
+If you get the error message: "xterm is not installed. Please install it first.", then you need to run this command inside the docker container to install xterm:
+```bash
+apt-get update && apt-get install -y xterm
