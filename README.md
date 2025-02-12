@@ -148,4 +148,66 @@ Now, we check if it is a permission issue. Close down all running operations, an
 pkill -f arducopter
 pkill -f mavproxy
 . ~/.profile
+
+
+# Swarm Drone Simulation Setup
+
+## Update Your Repository
+Ensure your repository is up to date before proceeding.
+
+## File Setup
+Navigate to your repository folder and move the required files:
+
+### Copy World File
+```bash
+cd custom_gz/worlds
+cp swarm_drone.sdf ~/ardu_ws/src/ardupilot_gazebo/worlds/
+```
+
+### Copy Model Folder
+```bash
+cd custom_gz/models
+cp -r drone4 ~/ardu_ws/src/ardupilot_gazebo/models/
+```
+
+## Launch Gazebo Simulation
+Open a terminal and execute the following command to start Gazebo:
+```bash
+gz sim -v4 -r swarm_drone.sdf
+```
+
+## Build and Source in Docker Terminal
+Follow these steps inside the Docker terminal:
+
+### Build ArduPilot Gazebo Package
+```bash
+cd ~/ardu_ws
+colcon build --packages-select ardupilot_gazebo
+source install/setup.bash
+```
+
+### Set Up Scripts and Launch Files
+```bash
+cd ~/ardu_ws/src/swarm_control/scripts
+chmod +x base_drone.py
+
+cd ../launch
+chmod +x decentralized_swarm.launch.py
+```
+
+### Build Swarm Control Package
+```bash
+cd ~/ardu_ws
+colcon build --packages-select swarm_control
+source install/setup.bash
+colcon build --packages-select swarm_control --symlink-install
+source install/setup.bash
+```
+
+## Launch the Swarm Control
+```bash
+ros2 launch swarm_control decentralized_swarm.launch.py
+```
+
+
 ```

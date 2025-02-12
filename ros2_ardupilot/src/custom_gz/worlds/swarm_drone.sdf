@@ -128,7 +128,7 @@
 
     <include>
       <uri>model://drone2</uri>
-      <pose degrees="true">5 0 0.195 0 0 90</pose>
+      <pose degrees="true">100 0 0.195 0 0 90</pose>
       <link name="base_link">
         <sensor name="gps" type="gps">
           <always_on>1</always_on>
@@ -139,7 +139,18 @@
 
     <include>
       <uri>model://drone3</uri>
-      <pose degrees="true">10 0 0.195 0 0 90</pose>
+      <pose degrees="true">-100 0 0.195 0 0 90</pose>
+      <link name="base_link">
+        <sensor name="gps" type="gps">
+          <always_on>1</always_on>
+          <update_rate>10</update_rate>
+        </sensor>
+      </link>
+    </include>
+    
+    <include>
+      <uri>model://drone4</uri>
+      <pose degrees="true">0 -100 0.195 0 0 90</pose>
       <link name="base_link">
         <sensor name="gps" type="gps">
           <always_on>1</always_on>

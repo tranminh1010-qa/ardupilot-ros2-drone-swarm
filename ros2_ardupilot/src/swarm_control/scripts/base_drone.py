@@ -48,6 +48,17 @@ class BaseDrone(Node):
         self.position_noise = NoiseInjector(mean=0.0, std_dev=0.3, time_correlation=0.8)
         self.velocity_noise = NoiseInjector(mean=0.0, std_dev=0.1, time_correlation=0.6)
 
+        radius = 30.0
+        height = 8.0
+        points = 12  # Number of points in the circle
+
+        self.waypoints = []
+        for i in range(points):
+            angle = 2 * np.pi * i / points
+            x = radius * np.cos(angle)
+            y = radius * np.sin(angle)
+            self.waypoints.append((x, y, height))
+
     def connection_check(self):
         if self.state != DroneState.CONNECTED:
             self.attempt_connect()
@@ -55,19 +66,11 @@ class BaseDrone(Node):
             self.connection_timer.cancel()
             self.post_connection_setup()
 
-    def apply_noise_to_position(self, x, y, z):
-        noise = self.position_noise.generate_noise()
-        noisy_pos = np.array([x, y, z]) + noise
-        deviation = np.linalg.norm(noise)
-        self.get_logger().info(f'Position deviation: {deviation:.2f}m')
-        return tuple(noisy_pos)
-
     def attempt_connect(self):
         try:
             if not self.mav_connection:
                 self.mav_connection = mavutil.mavlink_connection(self.mavlink_connection,
                                                                  source_system=self.drone_id + 1)
-
             self.mav_connection.wait_heartbeat(timeout=5)
             self.get_logger().info(f"Connected to FCU on {self.mavlink_connection}")
             self.state = DroneState.CONNECTED
@@ -87,66 +90,29 @@ class BaseDrone(Node):
 
     def setup_and_arm(self):
         if self.arm_drone_with_retry():
-            #    self.set_ekf_parameters()
             self.state = DroneState.ARMED
         else:
             self.get_logger().error("Failed to Arm drone")
             self.state = DroneState.ERROR
             return
 
-        # current_mode = self.get_current_mode()
-        # if current_mode != 'GUIDED':
-        #     if not self.set_guided_mode_with_retry():
-        #         self.state = DroneState.ERROR
-                # return
+    def arm_drone_with_retry(self):
+        if self.arming_attempts < self.max_attempts:
+            self.arming_attempts += 1
+            self.get_logger().info(f"Drone {self.drone_id}: Arming attempt {self.arming_attempts}")
 
-        # self.arm_drone_with_retry()
-
-    def check_ekf_health(self):
-        msg = self.mav_connection.recv_match(type='EKF_STATUS_REPORT', blocking=True, timeout=5)
-        if msg:
-            flags = msg.flags
-            required_flags = [
-                (mavutil.mavlink.EKF_ATTITUDE, "Attitude"),
-                (mavutil.mavlink.EKF_VELOCITY_HORIZ, "Horizontal Velocity"),
-                (mavutil.mavlink.EKF_VELOCITY_VERT, "Vertical Velocity"),
-                (mavutil.mavlink.EKF_POS_HORIZ_REL, "Relative Horizontal Position"),
-                (mavutil.mavlink.EKF_POS_HORIZ_ABS, "Absolute Horizontal Position"),
-                (mavutil.mavlink.EKF_POS_VERT_ABS, "Absolute Vertical Position"),
-                (mavutil.mavlink.EKF_POS_VERT_AGL, "Vertical Position AGL"),
-                (mavutil.mavlink.EKF_CONST_POS_MODE, "Constant Position Mode"),
-                (mavutil.mavlink.EKF_PRED_POS_HORIZ_REL, "Predicted Horizontal Position")
-            ]
-
-            all_flags_set = True
-            for flag, name in required_flags:
-                if not flags & flag:
-                    self.get_logger().warn(f"EKF flag not set: {name}")
-                    all_flags_set = False
-
-            if all_flags_set:
-                self.get_logger().info("EKF is healthy")
+            if self.arm_drone():
+                self.get_logger().info(f"Drone {self.drone_id}: Armed successfully")
+                self.arming_attempts = 0
+                self.state = DroneState.ARMED
+                self.on_armed_success()
+                return True
             else:
-                self.get_logger().warn("EKF is not healthy")
-            return all_flags_set
+                self.get_logger().warn(f"Drone {self.drone_id}: Arming failed, attempt {self.arming_attempts}")
+                self.create_timer(5.0, self.arm_drone_with_retry)
         else:
-            self.get_logger().warn("No EKF_STATUS_REPORT received")
-            return False
-
-    def wait_for_gps(self):
-        self.get_logger().info("Waiting for GPS lock...")
-        start_time = time.time()
-        while time.time() - start_time < 30:  # Wait up to 30 seconds
-            msg = self.mav_connection.recv_match(type='GPS_RAW_INT', blocking=True, timeout=1)
-            if msg:
-                self.get_logger().info(
-                    f"GPS status: fix_type={msg.fix_type}, satellites_visible={msg.satellites_visible}")
-                if msg.fix_type >= 3:
-                    self.get_logger().info("GPS lock acquired")
-                    return True
-            time.sleep(1)
-        self.get_logger().error("Failed to acquire GPS lock")
-        return False
+            self.get_logger().error(f"Drone {self.drone_id}: Failed to arm after {self.max_attempts} attempts")
+            self.state = DroneState.ERROR
 
     def arm_drone(self):
         self.get_logger().info("Attempting to arm drone")
@@ -174,6 +140,38 @@ class BaseDrone(Node):
                         return True
         return False
 
+    def takeoff_with_retry(self):
+        if self.wait_for_gps():
+            guided_attempt = 0
+            while not self.state == DroneState.FLYING:
+                self.get_logger().info(f"Drone: {self.drone_id} guided set attempt {guided_attempt}")
+                if self.set_guided_mode():
+                    self.state = DroneState.TAKING_OFF
+                    if self.takeoff(10):
+                        self.get_logger().info(f"Drone: {self.drone_id} Takeoff command accepted")
+                        self.monitor_takeoff()
+                        return
+                else:
+                    guided_attempt += 1
+        else:
+            self.get_logger().error(f"Drone: {self.drone_id} Failed to takeoff after {self.max_attempts} attempts")
+            self.state = DroneState.ERROR
+
+    def wait_for_gps(self):
+        self.get_logger().info("Waiting for GPS lock...")
+        start_time = time.time()
+        while time.time() - start_time < 30:  # Wait up to 30 seconds
+            msg = self.mav_connection.recv_match(type='GPS_RAW_INT', blocking=True, timeout=1)
+            if msg:
+                self.get_logger().info(
+                    f"GPS status: fix_type={msg.fix_type}, satellites_visible={msg.satellites_visible}")
+                if msg.fix_type >= 3:
+                    self.get_logger().info("GPS lock acquired")
+                    return True
+            time.sleep(1)
+        self.get_logger().error("Failed to acquire GPS lock")
+        return False
+
     def set_guided_mode(self):
         self.get_logger().info("Attempting to set GUIDED mode")
         self.mav_connection.mav.command_long_send(
@@ -190,15 +188,6 @@ class BaseDrone(Node):
         else:
             self.get_logger().error(f"Failed to set GUIDED mode")
             return False
-
-    def get_current_mode(self):
-        msg = self.mav_connection.recv_match(type='HEARTBEAT', blocking=True, timeout=5)
-        if msg:
-            mode = mavutil.mode_string_v10(msg)
-            self.get_logger().info(f"Current flight mode: {mode}")
-            return mode
-        self.get_logger().warn("Failed to get current flight mode")
-        return None
 
     def takeoff(self, altitude):
         self.get_logger().info(f"Attempting to takeoff to {altitude} meters")
@@ -218,63 +207,15 @@ class BaseDrone(Node):
         self.get_logger().error("Takeoff command failed")
         return False
 
-    def check_armed_status(self):
-        if self.mav_connection and not self.mav_connection.motors_armed() and self.armed and not self.disarm_requested:
-            self.get_logger().warn("Drone disarmed unexpectedly. Attempting to re-arm...")
-            self.state = DroneState.ARMING
-            self.set_guided_mode()
-            time.sleep(1)
-            self.arm_drone()
-
-    def arm_drone_with_retry(self):
-        if self.arming_attempts < self.max_attempts:
-            self.arming_attempts += 1
-            self.get_logger().info(f"Drone {self.drone_id}: Arming attempt {self.arming_attempts}")
-
-            if not self.check_pre_arm_status():
-                self.get_logger().warn("Pre-arm checks failed, attempting to arm anyway")
-
-            if self.arm_drone():
-                self.get_logger().info(f"Drone {self.drone_id}: Armed successfully")
-                self.arming_attempts = 0
-                self.state = DroneState.ARMED
-                self.on_armed_success()
+    def check_mode(self):
+        msg = self.mav_connection.recv_match(type='HEARTBEAT', blocking=True, timeout=1)
+        if msg:
+            custom_mode = msg.custom_mode
+            if custom_mode == 4:
                 return True
             else:
-                self.get_logger().warn(f"Drone {self.drone_id}: Arming failed, attempt {self.arming_attempts}")
-                self.create_timer(5.0, self.arm_drone_with_retry)
-        else:
-            self.get_logger().error(f"Drone {self.drone_id}: Failed to arm after {self.max_attempts} attempts")
-            self.state = DroneState.ERROR
-
-    def check_pre_arm_status(self):
-        start_time = time.time()
-        while time.time() - start_time < 10:  # Check for 10 seconds
-            msg = self.mav_connection.recv_match(type='STATUSTEXT', blocking=False)
-            if msg and "PreArm" in msg.text:
-                self.get_logger().warn(f"Pre-arm check: {msg.text}")
                 return False
-            time.sleep(0.1)
-        return True
-
-    def takeoff_with_retry(self):
-
-        if self.wait_for_gps():
-            guided_attempt = 0
-            while not self.state == DroneState.FLYING:
-                self.get_logger().info(f"Drone: {self.drone_id} guided set attempt {guided_attempt}")
-                if self.set_guided_mode():
-                    self.state = DroneState.TAKING_OFF
-                    if self.takeoff(10):
-                        self.get_logger().info(f"Drone: {self.drone_id} Takeoff command accepted")
-                        self.monitor_takeoff()
-                        return
-                else:
-                    guided_attempt += 1
-        else:
-            self.get_logger().error(f"Drone: {self.drone_id} Failed to takeoff after {self.max_attempts} attempts")
-            self.state = DroneState.ERROR
-
+            
     def log_imu_data(self):
         """Timer callback for logging IMU data"""
         if not self.mav_connection or not self.mav_connection.target_system:
@@ -301,7 +242,7 @@ class BaseDrone(Node):
             if pos_msg:
                 self.current_position = (pos_msg.x, pos_msg.y, -pos_msg.z)
             else:
-                self.get_logger().warn(f"No position data available for Leader {self.drone_id}")
+                self.get_logger().warn(f"No position data available for Drone {self.drone_id}")
                 return
 
             # Get IMU data with shorter timeout
@@ -312,49 +253,25 @@ class BaseDrone(Node):
             )
 
             if imu_msg:
-                self.get_logger().info(f"IMU DATA SAVING LEADER {self.drone_id}")
+                self.get_logger().info(f"IMU DATA SAVING DRONE {self.drone_id}")
                 self.imu_logger.log_imu_data(
                     imu_msg,
                     self.current_position,
                     self.target_position if self.target_position else self.current_position
                 )
             else:
-                self.get_logger().warn(f"No IMU Data for Leader {self.drone_id}")
+                self.get_logger().warn(f"No IMU Data for Drone {self.drone_id}")
 
         except Exception as e:
             self.get_logger().error(f"Error in IMU logging: {str(e)}")
 
-    def monitor_takeoff(self):
-        start_time = time.time()
-        while time.time() - start_time < 30:  # Monitor for 30 seconds
-            msg = self.mav_connection.recv_match(type='GLOBAL_POSITION_INT', blocking=True, timeout=1)
-            if msg:
-                relative_alt = msg.relative_alt / 1000.0  # Convert mm to m
-                self.get_logger().info(f"Current altitude: {relative_alt:.2f} m")
-                if abs(relative_alt - 10) < 0.5:  # Within 0.5m of target altitude
-                    self.get_logger().info(f"Drone {self.drone_id}: Takeoff successful")
-                    self.takeoff_attempts = 0
-                    self.state = DroneState.FLYING
-                    return
-            time.sleep(1)
-        self.get_logger().warn(f"Drone {self.drone_id}: Takeoff timeout, retrying")
-        self.takeoff_with_retry()
-
-    def check_mode(self):
-        msg = self.mav_connection.recv_match(type='HEARTBEAT', blocking=True, timeout=1)
-        if msg:
-            custom_mode = msg.custom_mode
-            if custom_mode == 4:
-                return True
-            else:
-                return False
-
-    def heartbeat_check(self):
-        if not self.mav_connection or not self.mav_connection.target_system:
-            self.get_logger().warn(f"Drone {self.drone_id}: No heartbeat received from FCU")
-        else:
-            self.get_logger().debug(f"Drone {self.drone_id}: Heartbeat received from FCU")
-
+    def apply_noise_to_position(self, x, y, z):
+        noise = self.position_noise.generate_noise()
+        noisy_pos = np.array([x, y, z]) + noise
+        deviation = np.linalg.norm(noise)
+        self.get_logger().info(f'Position deviation: {deviation:.2f}m')
+        return tuple(noisy_pos)
+    
     def shutdown(self):
         self.disarm_requested = True
         if self.mav_connection and self.mav_connection.target_system:
@@ -365,9 +282,148 @@ class BaseDrone(Node):
             self.get_logger().info("Landing command sent to drone")
             self.state = DroneState.LANDING
 
-    def recover_from_error(self):
-        self.get_logger().info(f"Drone {self.drone_id}: Attempting error recovery")
-        self.arming_attempts = 0
-        self.takeoff_attempts = 0
-        self.state = DroneState.INITIALIZING
-        self.attempt_connect()
+    def on_armed_success(self):
+        node_name = self.get_name()
+        self.get_logger().info(f"This is Drone Node {node_name}")
+        self.takeoff_with_retry()
+
+    def perform_action_if_base_drone(self):
+        # Check if the node name is 'base_drone'
+        if self.get_name() == 'base_drone':
+            self.get_logger().info("This is the base_drone node. Executing action.")
+            # Place your action here.
+            return True
+        else:
+            self.get_logger().info("Not the base_drone node. Action skipped.")
+            return False
+
+    def monitor_takeoff(self):
+        start_time = time.time()
+        reached_altitude = False
+
+        while time.time() - start_time < 30:  # 30 second timeout
+            msg = self.mav_connection.recv_match(type='GLOBAL_POSITION_INT', blocking=True, timeout=1)
+            if msg:
+                relative_alt = msg.relative_alt / 1000.0  # Convert mm to m
+                self.get_logger().info(f"Current altitude: {relative_alt:.2f} m")
+
+                if abs(relative_alt - 10) < 0.5:  # Within 0.5m of target altitude
+                    reached_altitude = True
+                    break
+
+            time.sleep(0.1)
+
+        if reached_altitude:
+            self.get_logger().info(" Takeoff successful")
+            self.state = DroneState.FLYING
+            if self.get_name() == 'leader_drone_node':
+                self.publish_takeoff_complete()
+            time.sleep(2)  # Allow time for stabilization
+            self.start_mission()
+            return True
+        else:
+            self.get_logger().error("Failed to reach takeoff altitude")
+            return False
+        
+    def start_mission(self):
+        if self.state != DroneState.FLYING:
+            return
+
+        # First stabilize at initial position
+        initial_pos = (0, 0, 10)
+        self.goto_position(*initial_pos)
+
+        current_waypoint = 0
+        while self.state == DroneState.FLYING:
+            wp = self.waypoints[current_waypoint]
+            self.target_position = wp
+            self.send_position_command(*wp)
+
+            # Check if we're close enough to current waypoint
+            msg = self.mav_connection.recv_match(type='LOCAL_POSITION_NED', blocking=True, timeout=1)
+            if msg:
+                current_pos = (msg.x, msg.y, -msg.z)
+                distance = np.linalg.norm(np.array(current_pos) - np.array(wp))
+
+                # If we're within 1 meter of the waypoint, move to next one
+                if distance < 1.0:
+                    current_waypoint = (current_waypoint + 1) % len(self.waypoints)
+                    time.sleep(0.5)  # Brief pause at waypoint
+
+            time.sleep(0.1)  # Control rate
+
+    def send_position_command(self, x, y, z):
+        try:
+            if self.get_name() == 'leader_drone_node':
+                noisy_pos = self.apply_noise_to_position(x, y, z)
+            else:
+                noisy_pos = (x,y,z)
+            self.mav_connection.mav.set_position_target_local_ned_send(
+                0,
+                self.mav_connection.target_system,
+                self.mav_connection.target_component,
+                mavutil.mavlink.MAV_FRAME_LOCAL_NED,
+                0b0000111111111000,
+                noisy_pos[0], noisy_pos[1], -noisy_pos[2],
+                0, 0, 0,  # velocity
+                0, 0, 0,  # acceleration
+                0, 0  # yaw
+            )
+            if self.get_name() == 'leader_drone_node':
+                self.publish_position()
+        except Exception as e:
+            self.get_logger().error(f"MAVLink command failed: {str(e)}")
+
+    def goto_position(self, x, y, z):
+        if self.state != DroneState.FLYING:
+            self.get_logger().error("Cannot goto position - drone not in FLYING state")
+            return False
+
+        self.get_logger().info(f"Original target: x={x}, y={y}, z={z}")
+
+        if self.get_name() == 'leader_drone_node':
+            noisy_pos = self.apply_noise_to_position(x, y, z)
+        else:
+            noisy_pos = [x,y,z]
+
+        try:
+            self.mav_connection.mav.set_position_target_local_ned_send(
+                0, self.mav_connection.target_system, self.mav_connection.target_component,
+                mavutil.mavlink.MAV_FRAME_LOCAL_NED, 0b0000111111111000,
+                noisy_pos[0], noisy_pos[1], -noisy_pos[2], 0, 0, 0, 0, 0, 0, 0, 0)
+
+            # Wait for position to be reached
+            if self.get_name() == 'leader_drone_node':
+                return self.wait_for_position(x, y, z)
+            else:
+                return (x, y, z)
+        except Exception as e:
+            self.get_logger().error(f"Error sending position command: {str(e)}")
+            return False
+
+
+def main(args=None):
+    import rclpy
+    rclpy.init(args=args)
+
+    node = BaseDrone('base_drone', 1, 'udp:localhost:14551')  # default values
+
+    # Retrieve parameters from the ROS parameter server (if set)
+    drone_id_param = node.declare_parameter('drone_id', 1).value
+    mavlink_connection_param = node.declare_parameter('mavlink_connection', 'udp:localhost:14551').value
+
+    # Update the node's attributes if parameters are provided
+    node.drone_id = drone_id_param
+    node.mavlink_connection = mavlink_connection_param
+        
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        node.get_logger().info("Keyboard Interrupt, shutting down.")
+    finally:
+        node.shutdown()
+        node.destroy_node()
+        rclpy.shutdown()
+
+if __name__ == '__main__':
+    main() 
