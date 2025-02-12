@@ -150,7 +150,7 @@ pkill -f mavproxy
 . ~/.profile
 ```
 
-## 8.Swarm Drone Simulation Setup
+# 8. Swarm Drone Simulation Setup
 
 ### Update Your Repository
 Ensure your repository is up to date before proceeding.
