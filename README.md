@@ -21,7 +21,6 @@ The following will build the image with the name `ardupilot/ardupilot-dev-ros` u
 This is to update the submodules build the image.
 ```bash
 cd ros2_ardupilot/
-git submodule update --init --recursive
 docker build -t ardupilot-ros2 .
 ```
 
@@ -44,6 +43,7 @@ docker run -it --net=host \
 
 If you have GPU and Cuda runtime set up on the device, you can also run the following for much faster performance 
 ```bash
+xhost +local:docker
 docker run -it --net=host \
   --add-host=host.docker.internal:host-gateway \
   --name="ardu_gpu" \
@@ -81,7 +81,7 @@ To access once the container is running
 docker container exec -it ardupilot-ros2 /bin/bash
 ````
 
-### 5. Test everything is working correctly  (Optional)
+### Test everything is working correctly  (Optional)
 Then we use the following to test everything is working correctly once inside the container
 
 ```bash
@@ -123,63 +123,36 @@ Finally, to run the simulation in gazebo, run the following in yet another termi
 ros2 launch ardupilot_gz_bringup iris_runway.launch.py
 ```
 
+
+# 5. Swarm Drone Simulation Setup
+
+### Update Your Repository
+Ensure your repository is up to date before proceeding.
+
+### File Setup
+Navigate to your repository folder and move the required files:
+
+#### Copy World File
+```bash
+cd custom_gz/worlds
+cp swarm_drone.sdf ~/ardu_ws/src/ardupilot_gazebo/worlds/
+```
+
+#####  Copy Model Folder
+```bash
+cd custom_gz/models
+cp -r drone4 ~/ardu_ws/src/ardupilot_gazebo/models/
+```
+Note: you can run gazebo on local machine, and ROS2/Ardupilot on docker then have them communicate through mavlink. You need to have gazebo installed and working correctly prior. 
+
 ### 6. Running the code
 
 To run the code, we need to first build the workspace. This is done by running the following in the container.
 ```bash
 cd ~/ardu_ws
 . ~/.profile
-colcon build --packages-select swarm_control --symlink-install
-source install/setup.bash
-ros2 launch swarm_control swarm.launch.py
-```
+````
 
-
-### 7. Debug Potential Issue
-
-In case there is an issue creating a connection between the ros2 nodes and the ardupilot SIL, let's start by checking running processes
-```bash
-sudo lsof -i :5760 #Change the port depending on the situatuin
-sudo kill -9 <PID>  # Replace <PID> with the process ID from the lsof command
-```
-
-Now, we check if it is a permission issue. Close down all running operations, and run as a non root user
-```bash
-pkill -f arducopter
-pkill -f mavproxy
-. ~/.profile
-```
-
-# 8. Swarm Drone Simulation Setup
-
-### 8.1 Update Your Repository
-Ensure your repository is up to date before proceeding.
-
-### 8.2 File Setup
-Navigate to your repository folder and move the required files:
-
-#### 8.2.1 Copy World File
-```bash
-cd custom_gz/worlds
-cp swarm_drone.sdf ~/ardu_ws/src/ardupilot_gazebo/worlds/
-```
-
-##### 8.2.2 Copy Model Folder
-```bash
-cd custom_gz/models
-cp -r drone4 ~/ardu_ws/src/ardupilot_gazebo/models/
-```
-
-## 9. Building Packages
-Follow these steps inside the Ubuntu terminal:
-
-### 9.1 Build ArduPilot Gazebo Package
-```bash
-cd ~/ardu_ws
-colcon build --packages-select ardupilot_gazebo
-source install/setup.bash
-```
-Follow these steps inside the Docker terminal:
 ### Set Up Scripts and Launch Files
 ```bash
 cd ~/ardu_ws/src/swarm_control/scripts
@@ -187,28 +160,24 @@ chmod +x base_drone.py
 
 cd ../launch
 chmod +x decentralized_swarm.launch.py
-```
 
-### 9.2 Build Swarm Control Package
-```bash
-cd ~/ardu_ws
-colcon build --packages-select swarm_control
-source install/setup.bash
+cd ~/ardu_ws/src
 colcon build --packages-select swarm_control --symlink-install
 source install/setup.bash
 ```
-## 10. Launch Simulation
-### 10.1 Launch Gazebo
+
+## 8. Launch Simulation
+### Launch Gazebo
 Open a ubuntu terminal and execute the following command to start Gazebo:
 ```bash
 gz sim -v4 -r swarm_drone.sdf
 ```
-### 10.2 Launch the Swarm Control
+### Launch the Swarm Control
 ```bash
 ros2 launch swarm_control decentralized_swarm.launch.py
 ```
 
-## 11. Test Custom SITL Binary
+## 9. Test Custom SITL Binary
 To run a test if the custom SITL binary is working along with the custom parameters, you first need to start and enter the docker container by running these commands:
  ```bash
 docker container start ardupilot-ros2
@@ -220,6 +189,24 @@ Then navigate to the testing script directory inside the docker container and ru
 cd /root/ardu_ws/src/swarm_control/custom-files
 ./run-test.sh
 ```
+
+
+### 10. Debug Potential Issue (Optional)
+
+In case there is an issue creating a connection between the ros2 nodes and the ardupilot SIL, let's start by checking running processes
+```bash
+sudo lsof -i :5760 #Change the port depending on the situatuin
+sudo kill -9 <PID>  # Replace <PID> with the process ID from the lsof command
+```
+
+Now, we check if it is a permission issue. Close down all running operations, and run as a non-root user
+```bash
+pkill -f arducopter
+pkill -f mavproxy
+. ~/.profile
+```
+
 If you get the error message: "xterm is not installed. Please install it first.", then you need to run this command inside the docker container to install xterm:
 ```bash
 apt-get update && apt-get install -y xterm
+```

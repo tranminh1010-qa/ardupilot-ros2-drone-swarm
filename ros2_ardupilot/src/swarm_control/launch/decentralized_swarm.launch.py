@@ -2,191 +2,96 @@
 
 import os
 from launch import LaunchDescription
-from launch.actions import ExecuteProcess, GroupAction, TimerAction, LogInfo
+from launch.actions import ExecuteProcess, TimerAction, LogInfo
 from launch_ros.actions import Node
-from launch.substitutions import LaunchConfiguration
-from launch.actions import DeclareLaunchArgument
 from ament_index_python.packages import get_package_share_directory
-from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 
 
 def generate_launch_description():
     try:
-        # Verify the correct path for the iris_quadcopter model
+        # Verify paths
         bringup_dir = get_package_share_directory('ardupilot_gazebo')
         sdf_path = os.path.join(bringup_dir, 'models', 'iris_with_ardupilot', 'model.sdf')
-        swarm_control_share = get_package_share_directory('swarm_control')
         param_file = "/root/ardu_ws/src/swarm_control/parameters/ardu_gps_noise.parm"
         host_address = '172.17.0.1'
 
-        if not os.path.exists(sdf_path):
-            raise FileNotFoundError(f"SDF file not found: {sdf_path}")
-
-        if not os.path.exists(param_file):
-            raise FileNotFoundError(f"Parameter file not found: {param_file}")
+        # Check if required files exist
+        for path in [sdf_path, param_file]:
+            if not os.path.exists(path):
+                raise FileNotFoundError(f"Required file not found: {path}")
 
         print(f"Using parameter file: {param_file}")
 
-        # Launch ArduPilot SITL instances
-        ardupilot_sitl_drone1 = ExecuteProcess(
-            cmd=[
+        # Common environment variables for SITL instances
+        common_env = {
+            'ARDU_SIM_PROVIDED': 'gz',
+            'GZ_SIM_SYSTEM_PLUGIN_PATH': '/root/ardu_ws/install/ardupilot_gazebo/lib/ardupilot_gazebo/',
+            'GZ_SIM_RESOURCE_PATH': '/root/ardu_ws/install/ardupilot_gazebo/share/ardupilot_gazebo/',
+        }
+
+        # Launch components with appropriate delays
+        launch_sequence = [LogInfo(msg="Starting SITL instances...")]
+
+        # Create SITL instances and drone nodes for each drone
+        for i in range(4):
+            drone_id = i + 1
+            instance = i
+            ros_port = 14551 + (i * 10)
+            gazebo_port = 14550 + (i * 10)
+
+            # SITL instance
+            sitl_cmd = [
                 'sim_vehicle.py',
                 '-v', 'ArduCopter',
                 '-f', 'gazebo-iris',
                 '--model', 'JSON',
                 '--console',
-                '--instance', '0',
-                '--sysid', '1',
+                f'--instance', str(instance),
+                f'--sysid', str(drone_id),
                 '--speedup', '2',
-                '--sim-address=' + host_address,
+                f'--sim-address={host_address}',
                 '--custom-location=40.072842,-105.230575,1586,0',
-                '--out=udp:127.0.0.1:14551',  # Local connection for ROS
-                '--out=udp:172.17.0.1:14550',  # Connection to Gazebo
+                f'--out=udp:127.0.0.1:{ros_port}',
+                f'--out=udp:172.17.0.1:{gazebo_port}',
                 '--add-param-file', param_file,
-            ],
-            output='screen',
-            shell=True,
-            additional_env={
-                'ARDU_SIM_PROVIDED': 'gz',
-                'GZ_SIM_SYSTEM_PLUGIN_PATH': '/root/ardu_ws/install/ardupilot_gazebo/lib/ardupilot_gazebo/',
-                'GZ_SIM_RESOURCE_PATH': '/root/ardu_ws/install/ardupilot_gazebo/share/ardupilot_gazebo/',
-            }
-        )
+            ]
 
-        ardupilot_sitl_drone2 = ExecuteProcess(
-            cmd=[
-                'sim_vehicle.py',
-                '-v', 'ArduCopter',
-                '-f', 'gazebo-iris',
-                '--model', 'JSON',
-                '--console',
-                '--instance', '1',
-                '--sysid', '2',
-                '--speedup', '2',
-                '--sim-address=' + host_address,
-                '--custom-location=40.072842,-105.230575,1586,0',
-                '--out=udp:127.0.0.1:14561',  # Local connection for ROS
-                '--out=udp:172.17.0.1:14560',  # Connection to Gazebo
-                '--add-param-file', param_file,
-            ],
-            output='screen',
-            shell=True,
-            additional_env={
-                'ARDU_SIM_PROVIDED': 'gz',
-                'GZ_SIM_SYSTEM_PLUGIN_PATH': '/root/ardu_ws/install/ardupilot_gazebo/lib/ardupilot_gazebo/',
-                'GZ_SIM_RESOURCE_PATH': '/root/ardu_ws/install/ardupilot_gazebo/share/ardupilot_gazebo/',
-            }
-        )
+            sitl_action = ExecuteProcess(
+                cmd=sitl_cmd,
+                output='screen',
+                shell=True,
+                additional_env=common_env
+            )
 
-        ardupilot_sitl_drone3 = ExecuteProcess(
-            cmd=[
-                'sim_vehicle.py',
-                '-v', 'ArduCopter',
-                '-f', 'gazebo-iris',
-                '--model', 'JSON',
-                '--console',
-                '--instance', '2',
-                '--sysid', '3',
-                '--speedup', '2',
-                '--sim-address=' + host_address,
-                '--custom-location=40.072842,-105.230575,1586,0',
-                '--out=udp:127.0.0.1:14571',  # Changed to unique port for ROS
-                '--out=udp:172.17.0.1:14570',  # Connection to Gazebo
-                '--add-param-file', param_file,
-            ],
-            output='screen',
-            shell=True,
-            additional_env={
-                'ARDU_SIM_PROVIDED': 'gz',
-                'GZ_SIM_SYSTEM_PLUGIN_PATH': '/root/ardu_ws/install/ardupilot_gazebo/lib/ardupilot_gazebo/',
-                'GZ_SIM_RESOURCE_PATH': '/root/ardu_ws/install/ardupilot_gazebo/share/ardupilot_gazebo/',
-            }
-        )
+            # Add SITL instance with delay
+            launch_sequence.append(TimerAction(
+                period=5.0 + (i * 5.0),
+                actions=[sitl_action]
+            ))
 
-        ardupilot_sitl_drone4 = ExecuteProcess(
-            cmd=[
-                'sim_vehicle.py',
-                '-v', 'ArduCopter',
-                '-f', 'gazebo-iris',
-                '--model', 'JSON',
-                '--console',
-                '--instance', '3',
-                '--sysid', '4',
-                '--speedup', '2',
-                '--sim-address=' + host_address,
-                '--custom-location=40.072842,-105.230575,1586,0',
-                '--out=udp:127.0.0.1:14581',  # Changed to unique port for ROS
-                '--out=udp:172.17.0.1:14580',  # Connection to Gazebo
-                '--add-param-file', param_file,
-            ],
-            output='screen',
-            shell=True,
-            additional_env={
-                'ARDU_SIM_PROVIDED': 'gz',
-                'GZ_SIM_SYSTEM_PLUGIN_PATH': '/root/ardu_ws/install/ardupilot_gazebo/lib/ardupilot_gazebo/',
-                'GZ_SIM_RESOURCE_PATH': '/root/ardu_ws/install/ardupilot_gazebo/share/ardupilot_gazebo/',
-            }
-        )
+            # Drone ROS node
+            drone_node = Node(
+                package='swarm_control',
+                executable='base_drone.py',
+                name=f'drone{drone_id}',
+                output='screen',
+                parameters=[{
+                    'drone_id': drone_id,
+                    'mavlink_connection': f'udp:localhost:{ros_port}'
+                }]
+            )
 
-        # drone nodes
-        drone1_node = Node(
-            package='swarm_control',
-            executable='base_drone.py',
-            name='drone1',
-            output='screen',
-            parameters=[{
-                'drone_id': 1,
-                'mavlink_connection': 'udp:localhost:14551',
-            }]
-        )
+            # Add drone node with delay
+            launch_sequence.append(TimerAction(
+                period=35.0 + (i * 5.0),
+                actions=[drone_node]
+            ))
 
-        # drone nodes with corrected ports
-        drone2_node = Node(
-            package='swarm_control',
-            executable='base_drone.py',
-            name='drone2',
-            output='screen',
-            parameters=[{
-                'drone_id': 2,
-                'mavlink_connection': 'udp:localhost:14561'
-            }]
-        )
+        # Add log message between SITL and ROS node launches
+        launch_sequence.insert(5, LogInfo(msg="Starting ROS nodes..."))
 
-        drone3_node = Node(
-            package='swarm_control',
-            executable='base_drone.py',
-            name='drone3',
-            output='screen',
-            parameters=[{
-                'drone_id': 3,
-                'mavlink_connection': 'udp:localhost:14571'
-            }]
-        )
+        return LaunchDescription(launch_sequence)
 
-        drone4_node = Node(
-            package='swarm_control',
-            executable='base_drone.py',
-            name='drone4',
-            output='screen',
-            parameters=[{
-                'drone_id': 4,
-                'mavlink_connection': 'udp:localhost:14581'
-            }]
-        )
-
-        # Construct launch description with appropriate delays
-        return LaunchDescription([
-            LogInfo(msg="Starting SITL instances..."),
-            TimerAction(period=5.0, actions=[ardupilot_sitl_drone1]),
-            TimerAction(period=10.0, actions=[ardupilot_sitl_drone2]),
-            TimerAction(period=15.0, actions=[ardupilot_sitl_drone3]),
-            TimerAction(period=20.0, actions=[ardupilot_sitl_drone4]),
-            LogInfo(msg="Starting ROS nodes..."),
-            TimerAction(period=35.0, actions=[drone1_node]),
-            TimerAction(period=40.0, actions=[drone2_node]),
-            TimerAction(period=45.0, actions=[drone3_node]),
-            TimerAction(period=50.0, actions=[drone4_node])
-        ])
     except Exception as e:
         print(f"Error in launch file: {str(e)}")
         return LaunchDescription([])

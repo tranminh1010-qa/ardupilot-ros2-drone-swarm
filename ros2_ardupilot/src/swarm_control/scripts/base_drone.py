@@ -215,7 +215,7 @@ class BaseDrone(Node):
                 return True
             else:
                 return False
-            
+
     def log_imu_data(self):
         """Timer callback for logging IMU data"""
         if not self.mav_connection or not self.mav_connection.target_system:
@@ -271,7 +271,7 @@ class BaseDrone(Node):
         deviation = np.linalg.norm(noise)
         self.get_logger().info(f'Position deviation: {deviation:.2f}m')
         return tuple(noisy_pos)
-    
+
     def shutdown(self):
         self.disarm_requested = True
         if self.mav_connection and self.mav_connection.target_system:
@@ -324,7 +324,7 @@ class BaseDrone(Node):
         else:
             self.get_logger().error("Failed to reach takeoff altitude")
             return False
-        
+
     def start_mission(self):
         if self.state != DroneState.FLYING:
             return
@@ -403,7 +403,6 @@ class BaseDrone(Node):
 
 
 def main(args=None):
-    import rclpy
     rclpy.init(args=args)
 
     node = BaseDrone('base_drone', 1, 'udp:localhost:14551')  # default values
@@ -415,7 +414,7 @@ def main(args=None):
     # Update the node's attributes if parameters are provided
     node.drone_id = drone_id_param
     node.mavlink_connection = mavlink_connection_param
-        
+
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
@@ -426,4 +425,4 @@ def main(args=None):
         rclpy.shutdown()
 
 if __name__ == '__main__':
-    main() 
+    main()
