@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import numpy as np
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped
@@ -8,7 +9,7 @@ import time
 import csv
 import enum
 from noise_injector import NoiseInjector
-import numpy as np
+from points_distributor import generate_circular_waypoints
 
 class DroneState(enum.Enum):
     INITIALIZING = 0
@@ -23,7 +24,7 @@ class DroneState(enum.Enum):
 
 
 class BaseDrone(Node):
-    def __init__(self, node_name, drone_id, mavlink_connection):
+    def __init__(self, node_name, drone_id, mavlink_connection, assigned_waypoints=None):
         super().__init__(node_name)
         self.waypoints = None
         self.takeoff_complete_publisher = None
@@ -48,16 +49,10 @@ class BaseDrone(Node):
         self.position_noise = NoiseInjector(mean=0.0, std_dev=0.3, time_correlation=0.8)
         self.velocity_noise = NoiseInjector(mean=0.0, std_dev=0.1, time_correlation=0.6)
 
-        radius = 30.0
-        height = 8.0
-        points = 12  # Number of points in the circle
-
-        self.waypoints = []
-        for i in range(points):
-            angle = 2 * np.pi * i / points
-            x = radius * np.cos(angle)
-            y = radius * np.sin(angle)
-            self.waypoints.append((x, y, height))
+        # If no waypoints are assigned, create default circular waypoints
+        if assigned_waypoints is None:
+            self.waypoints = generate_circular_waypoints()
+        else: self.waypoints = eval(assigned_waypoints)
 
     def connection_check(self):
         if self.state != DroneState.CONNECTED:
@@ -215,6 +210,7 @@ class BaseDrone(Node):
                 return True
             else:
                 return False
+        return None
 
     def log_imu_data(self):
         """Timer callback for logging IMU data"""

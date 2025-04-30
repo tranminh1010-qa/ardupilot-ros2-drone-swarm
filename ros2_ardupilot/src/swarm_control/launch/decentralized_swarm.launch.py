@@ -5,10 +5,12 @@ from launch import LaunchDescription
 from launch.actions import ExecuteProcess, TimerAction, LogInfo
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
+from scripts.points_distributor import split_waypoints, generate_circular_waypoints
 
 
 def generate_launch_description():
     try:
+        __num_drones = 3 #Modifying this value requires modifying the gazebo.sdf
         # Verify paths
         bringup_dir = get_package_share_directory('ardupilot_gazebo')
         sdf_path = os.path.join(bringup_dir, 'models', 'iris_with_ardupilot', 'model.sdf')
@@ -31,13 +33,15 @@ def generate_launch_description():
 
         # Launch components with appropriate delays
         launch_sequence = [LogInfo(msg="Starting SITL instances...")]
-
+        wps = generate_circular_waypoints()
+        chunks = split_waypoints(wps, __num_drones)
         # Create SITL instances and drone nodes for each drone
-        for i in range(4):
+        for i in range(__num_drones):
             drone_id = i + 1
             instance = i
             ros_port = 14551 + (i * 10)
             gazebo_port = 14550 + (i * 10)
+            wp = chunks[i]
 
             # SITL instance
             sitl_cmd = [
@@ -77,7 +81,8 @@ def generate_launch_description():
                 output='screen',
                 parameters=[{
                     'drone_id': drone_id,
-                    'mavlink_connection': f'udp:localhost:{ros_port}'
+                    'mavlink_connection': f'udp:localhost:{ros_port}',
+                    'assigned_waypoints': str(wp),
                 }]
             )
 

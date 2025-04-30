@@ -115,6 +115,7 @@ In a separate terminal, run the following to see the list of publishers
 ```bash
 docker container exec -it ardupilot-ros2 /bin/bash
 source ~/ardu_ws/install/setup.bash
+export ROS_DOMAIN_ID=0
 ros2  topic list
 ```
 
@@ -143,7 +144,7 @@ cp swarm_drone.sdf ~/ardu_ws/src/ardupilot_gazebo/worlds/
 cd custom_gz/models
 cp -r drone4 ~/ardu_ws/src/ardupilot_gazebo/models/
 ```
-Note: you can run gazebo on local machine, and ROS2/Ardupilot on docker then have them communicate through mavlink. You need to have gazebo installed and working correctly prior. 
+Note: you can run gazebo on a local machine, and ROS2/Ardupilot on docker then have them communicate through mavlink. You need to have gazebo installed and working correctly prior. 
 
 ### 6. Running the code
 
@@ -155,23 +156,19 @@ cd ~/ardu_ws
 
 ### Set Up Scripts and Launch Files
 ```bash
-cd ~/ardu_ws/src/swarm_control/scripts
-chmod +x base_drone.py
-
-cd ../launch
-chmod +x decentralized_swarm.launch.py
-
 cd ~/ardu_ws/src
-colcon build --packages-select swarm_control --symlink-install
+colcon build --packages-select swarm_control ardupilot_msgs micro_ros_msgs micro_ros_agent ardupilot_sitl --symlink-install
 source install/setup.bash
 ```
 
 ## 8. Launch Simulation
 ### Launch Gazebo
-Open a ubuntu terminal and execute the following command to start Gazebo:
+Open an ubuntu terminal and execute the following command to start Gazebo:
 ```bash
 gz sim -v4 -r swarm_drone.sdf
 ```
+
+In the case of running the gazebo on the host machine, read the README_gazebo.md instructions.
 ### Launch the Swarm Control
 ```bash
 ros2 launch swarm_control decentralized_swarm.launch.py
@@ -189,7 +186,6 @@ Then navigate to the testing script directory inside the docker container and ru
 cd /root/ardu_ws/src/swarm_control/custom-files
 ./run-test.sh
 ```
-
 
 ### 10. Debug Potential Issue (Optional)
 

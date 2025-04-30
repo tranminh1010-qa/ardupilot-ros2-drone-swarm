@@ -4,6 +4,7 @@ project(swarm_control)
 # Find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_core REQUIRED)
+find_package(ament_cmake_python REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclpy REQUIRED)
 find_package(std_msgs REQUIRED)
@@ -24,6 +25,8 @@ file(GLOB SCRIPT_FILES
   "utility/*"
 )
 
+ament_python_install_package(scripts)
+ament_python_install_package(utility)
 
 # Install Python scripts
 install(PROGRAMS
