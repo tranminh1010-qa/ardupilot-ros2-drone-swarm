@@ -52,7 +52,10 @@ class BaseDrone(Node):
         # If no waypoints are assigned, create default circular waypoints
         if assigned_waypoints is None:
             self.waypoints = generate_circular_waypoints()
-        else: self.waypoints = eval(assigned_waypoints)
+        else:
+            self.waypoints = eval(assigned_waypoints)
+        self.get_logger().info("waypoints assigned to drone {}: {}".format(drone_id, self.waypoints))
+
 
     def connection_check(self):
         if self.state != DroneState.CONNECTED:

@@ -2,123 +2,110 @@
 FROM ros:humble-ros-base
 
 # Set environment variables
-ENV DEBIAN_FRONTEND=noninteractive
-ENV TZ=UTC
-ENV PATH="/usr/lib/ccache:$PATH"
+ENV DEBIAN_FRONTEND=noninteractive \
+    TZ=UTC \
+    PATH="/usr/lib/ccache:$PATH" \
+    MICROXRCEDDSGEN_HOME="/usr/local/share/microxrceddsgen" \
+    PATH="/usr/local/bin:$PATH" \
+    DISABLE_MAVNATIVE=True \
+    BUILDLOGS=/tmp/buildlogs \
+    XRCE_DDS_TOOL=/usr/local/bin/microxrceddsgen
 
 # Install system dependencies
 RUN apt-get update && apt-get install --no-install-recommends -y \
-    lsb-release sudo wget software-properties-common build-essential ccache \
-    g++ gdb gawk git make cmake ninja-build libtool libxml2-dev libxml2-utils \
-    libxslt1-dev python3-numpy python3-pyparsing python3-serial python-is-python3 \
-    libpython3-stdlib libtool-bin zip default-jre socat ros-dev-tools \
-    ros-humble-launch-pytest gazebo ros-humble-gazebo-ros-pkgs iputils-ping \
-    ros-humble-mavros-msgs python3-pip python3-setuptools libasio-dev \
-    python3-vcstool python3-rosdep python3-colcon-common-extensions \
-    ros-humble-rmw-fastrtps-cpp python3-scipy curl \
+    # Build tools
+    build-essential ccache g++ gdb make cmake ninja-build \
+    # Development tools
+    gawk git libtool libxml2-dev libxml2-utils libxslt1-dev sudo \
+    # Python tools
+    python3-numpy python3-pyparsing python3-serial python-is-python3 \
+    libpython3-stdlib python3-pip python3-setuptools python3-vcstool \
+    python3-rosdep python3-colcon-common-extensions python3-scipy \
+    # System utilities
+    curl iproute2 lsb-release libtool-bin net-tools software-properties-common \
+    wget xterm zip iputils-ping \
+    # Java
+    default-jre openjdk-11-jdk maven \
+    # ROS packages
+    ros-dev-tools \
+    ros-humble-launch-pytest \
+    ros-humble-gazebo-ros-pkgs \
+    ros-humble-mavros-msgs \
+    ros-humble-rmw-fastrtps-cpp \
     ros-humble-rosidl-generator-dds-idl \
     ros-humble-rmw-cyclonedds-cpp \
-    openjdk-11-jdk \
-    maven \
-    xterm \
-    default-jre \
+    gazebo \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python packages
-RUN pip3 install --no-cache-dir -U future lxml pexpect flake8 empy==3.3.4 pyelftools \
+RUN pip3 install --no-cache-dir -U \
+    future lxml pexpect flake8 empy==3.3.4 pyelftools \
     tabulate pymavlink pre-commit junitparser mavproxy geopy ament-black
 
-# Create workspace directory
+# Create workspace directory and clone repositories
 WORKDIR /root
-RUN mkdir -p /root/ardu_ws/src
+RUN mkdir -p /root/ardu_ws/src && \
+    cd /root/ardu_ws/src/ && \
+    git clone --recurse-submodules https://github.com/ArduPilot/ardupilot.git && \
+    cd ardupilot && \
+    git submodule update --init --recursive
 
-# Import the required repositories for ROS 2 integration using vcs
+# Import required repositories and install dependencies
 WORKDIR /root/ardu_ws
-# Complete ArduPilot build
-RUN cd ~/ardu_ws/src/ \
-    && git clone --recurse-submodules https://github.com/ArduPilot/ardupilot.git \
-    && cd ardupilot \
-    && git submodule update --init --recursive \
-    && . ~/.profile
-
-
-RUN vcs import --recursive --input https://raw.githubusercontent.com/ArduPilot/ardupilot/master/Tools/ros2/ros2.repos src
-
-# Install rosdep dependencies
-RUN rosdep update && \
+RUN vcs import --recursive --input https://raw.githubusercontent.com/ArduPilot/ardupilot/master/Tools/ros2/ros2.repos src && \
+    cd /root/ardu_ws/src && \
+    git clone https://github.com/micro-ROS/micro_ros_msgs.git && \
+    rosdep update && \
     source /opt/ros/humble/setup.bash && \
     rosdep install --from-paths src --ignore-src -r -y || true
 
-# Install Micro-XRCE-DDS-Gen build dependency
+# Install and setup Micro-XRCE-DDS-Gen
 WORKDIR /root/ardu_ws/src
-RUN apt-get update && apt-get install -y && \
+RUN apt-get update && \
     git clone --recurse-submodules https://github.com/ardupilot/Micro-XRCE-DDS-Gen.git && \
     cd Micro-XRCE-DDS-Gen && \
     ./gradlew assemble && \
     mkdir -p /usr/local/share/microxrceddsgen/java && \
     cp build/libs/microxrceddsgen.jar /usr/local/share/microxrceddsgen/java/ && \
     cp -r scripts/* /usr/local/bin/ && \
-    chmod +x /usr/local/bin/microxrceddsgen
-
-# Set environment variable for microxrceddsgen
-ENV PATH="/usr/local/bin:$PATH"
-ENV MICROXRCEDDSGEN_HOME="/usr/local/share/microxrceddsgen"
-
-WORKDIR /root/ardu_ws/src
-RUN git clone https://github.com/micro-ROS/micro_ros_msgs.git
-
-
-
-RUN cd ~/ardu_ws \
-    && rosdep update \
-    && . /opt/ros/humble/setup.sh \
-    && rosdep install --from-paths src --ignore-src -r -y || true
+    chmod +x /usr/local/bin/microxrceddsgen && \
+    cd /root/ardu_ws/src/ardupilot && \
+    mkdir -p Tools/scripts && \
+    echo '#!/bin/bash\n/usr/local/bin/microxrceddsgen "$@"' > Tools/scripts/run_microxrceddsgen.sh && \
+    chmod +x Tools/scripts/run_microxrceddsgen.sh
 
 # Build ROS 2 packages
 WORKDIR /root/ardu_ws
-RUN /bin/bash -c "source /opt/ros/humble/setup.bash && \
-    colcon build --packages-up-to ardupilot_dds_tests"
-
-
-# Create helper script for microxrceddsgen
-WORKDIR /root/ardu_ws/src/ardupilot
-RUN mkdir -p Tools/scripts && \
-    echo '#!/bin/bash\n\
-/usr/local/bin/microxrceddsgen "$@"' > Tools/scripts/run_microxrceddsgen.sh && \
-    chmod +x Tools/scripts/run_microxrceddsgen.sh
+RUN  . /opt/ros/humble/setup.sh && colcon build --packages-up-to ardupilot_dds_tests
 
 # Build ArduPilot with DDS support
+WORKDIR /root/ardu_ws/src/ardupilot
 RUN ./waf distclean && \
     ./waf configure --board sitl --enable-dds --debug && \
-    sed -i '/MICROXRCEDDSGEN.*-default-container-prealloc-size/s/-default-container-prealloc-size [^ ]* //g' libraries/AP_DDS/wscript
+    sed -i '/MICROXRCEDDSGEN.*-default-container-prealloc-size/s/-default-container-prealloc-size [^ ]* //g' libraries/AP_DDS/wscript && \
+    ./waf build -v
 
-RUN ./waf build -v # || (echo "Build failed with detailed error:" && cat build/sitl/libraries/AP_DDS/AP_DDS_Client.cpp.0.o.err || true)
-
-# Set environment variables for Ardupilot
-ENV PATH="/root/ardu_ws/src/ardupilot/Tools/autotest:$PATH"
-ENV DISABLE_MAVNATIVE=True
-ENV BUILDLOGS=/tmp/buildlogs
-ENV XRCE_DDS_TOOL=/usr/local/bin/microxrceddsgen
-# Install Gazebo Harmonic
-ENV GZ_VERSION=harmonic
-RUN apt-get update && apt-get install -y \
-    lsb-release wget gnupg \
-    && wget https://packages.osrfoundation.org/gazebo.gpg -O /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null \
-    && apt-get update \
-    && apt-get install -y \
-        gz-harmonic \
-        libgz-sim7-dev \
+# Install Gazebo Sim 8 to match host version
+RUN apt-get update && \
+    wget https://packages.osrfoundation.org/gazebo.gpg -O /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null && \
+    apt-get update && \
+    apt-get install -y \
+        # Gazebo packages
+        gz-garden \
+        libgz-sim8-dev \
         libgz-math7-dev \
         libgz-transport12-dev \
         libsdformat13-dev \
         libgz-cmake3-dev \
         libgz-plugin2-dev \
+        # ROS-Gazebo integration
         ros-humble-ros-gz \
         ros-humble-ros-gz-bridge \
         ros-humble-ros-gz-sim \
         ros-humble-ros-gz-interfaces \
+        # Additional dependencies
         rapidjson-dev \
         ros-humble-topic-tools \
         ros-humble-ament-cmake-mypy \
@@ -126,14 +113,13 @@ RUN apt-get update && apt-get install -y \
         ros-humble-ament-cmake-pycodestyle \
     && rm -rf /var/lib/apt/lists/*
 
-# Import Gazebo repositories
-RUN cd /root/ardu_ws \
-    && vcs import --input https://raw.githubusercontent.com/ArduPilot/ardupilot_gz/main/ros2_gz.repos --recursive src
-
-# Install additional dependencies
-RUN add-apt-repository universe \
-    && apt-get update \
-    && apt-get install -y python3-colcon-common-extensions \
+# Import Gazebo repositories and install additional dependencies
+WORKDIR /root/ardu_ws
+RUN apt-get update && \
+    apt-add-repository universe && \
+    apt-get update && \
+    apt-get install -y \
+        # Gstreamer packages
         libgstreamer1.0-dev \
         libgstreamer-plugins-base1.0-dev \
         gstreamer1.0-plugins-base \
@@ -142,63 +128,73 @@ RUN add-apt-repository universe \
         gstreamer1.0-plugins-ugly \
         gstreamer1.0-libav \
         gstreamer1.0-tools \
-        libzip-dev
+        libzip-dev \
+        # Graphics support
+        libgl1-mesa-glx \
+        libgl1-mesa-dri \
+        libglu1-mesa \
+        x11-xserver-utils \
+        libosmesa6-dev \
+        xauth \
+        # Missing dependencies
+        python3-pip \
+        socat \
+    && rm -rf /var/lib/apt/lists/* && \
+    pip3 install geopy && \
+    vcs import --input https://raw.githubusercontent.com/ArduPilot/ardupilot_gz/main/ros2_gz.repos --recursive src && \
+    bash -c ". /opt/ros/humble/setup.bash && \
+    rosdep update && \
+    rosdep install --from-paths src --ignore-src -y -r --rosdistro humble || true && \
+    colcon build --packages-up-to ardupilot_gz_bringup"
 
-# Build Gazebo packages
-RUN /bin/bash -c "cd /root/ardu_ws \
-    && source /opt/ros/humble/setup.bash \
-    && rosdep update \
-    && rosdep install --from-paths src --ignore-src -y -r \
-    && colcon build --packages-up-to ardupilot_gz_bringup"
-
-# Source the workspace in .bashrc
-RUN echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc \
-    && echo "source /root/ardu_ws/install/setup.bash" >> ~/.bashrc
-
-# Set working directory
-WORKDIR /root/ardu_ws/
-
-# Handle graphical settings for Gazebo
-RUN apt-get update && apt-get install -y \
-    libgl1-mesa-glx \
-    libgl1-mesa-dri \
-    libglu1-mesa \
-    x11-xserver-utils \
-    libosmesa6-dev \
-    xauth \
-    && rm -rf /var/lib/apt/lists/*
+# Setup display and environment directories
+RUN mkdir -p /tmp/runtime-root && chmod 700 /tmp/runtime-root && \
+    echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc && \
+    echo "source /root/ardu_ws/install/setup.bash" >> ~/.bashrc
 
 # Set environment variables for display
-ENV DISPLAY=:0
-ENV QT_X11_NO_MITSHM=1
-ENV LIBGL_ALWAYS_SOFTWARE=1
-ENV XDG_RUNTIME_DIR=/tmp/runtime-root
-ENV XAUTHORITY=/tmp/.docker.xauth
-ENV XDG_SESSION_TYPE=x11
-ENV XDG_DATA_DIRS=/usr/local/share:/usr/share:/var/lib/snapd/desktop
-ENV XDG_CONFIG_DIRS=/etc/xdg/xdg-ubuntu:/etc/xdg
-ENV XDG_CURRENT_DESKTOP=ubuntu:GNOME
-ENV XDG_SESSION_DESKTOP=ubuntu
-ENV XDG_SESSION_CLASS=user
-ENV XDG_SESSION_ID=1
-ENV XDG_SESSION_COOKIE=1
-ENV XDG_SEAT=seat0
-ENV XDG_VTNR=2
-ENV XDG_GREETER_DATA_DIR=/var/lib/lightdm-data/root
-ENV XDG_CONFIG_HOME=/root/.config
-ENV XDG_CACHE_HOME=/root/.cache
-ENV XDG_DATA_HOME=/root/.local/share
-# Set the GZ_SIM_RESOURCE_PATH environment variables
-ENV GZ_SIM_RESOURCE_PATH=/root/ardu_ws/src/custom_gz/models
+ENV DISPLAY=:0 \
+    QT_X11_NO_MITSHM=1 \
+    LIBGL_ALWAYS_SOFTWARE=1 \
+    XDG_RUNTIME_DIR=/tmp/runtime-root \
+    XAUTHORITY=/tmp/.docker.xauth \
+    XDG_SESSION_TYPE=x11 \
+    PATH="/root/ardu_ws/src/ardupilot/Tools/autotest:$PATH" \
+    GZ_SIM_RESOURCE_PATH=/root/ardu_ws/src/custom_gz/models
 
+# Unset problematic environment variables and set correct Gazebo Sim environment variables
+ENV GAZEBO_MASTER_URI="" \
+    IGN_IP="" \
+    IGN_PARTITION="" \
+    ROS_DOMAIN_ID="" \
+    RMW_IMPLEMENTATION="" \
+    GZ_PARTITION="$(hostname)" \
+    GZ_IP="127.0.0.1" \
+    GZ_VERBOSE="4" \
+    GZ_DISCOVERY_MULTICAST="1" \
+    GZ_TRANSPORT_TOPIC_STATISTICS="1"
 
-RUN mkdir -p $XDG_RUNTIME_DIR && chmod 700 $XDG_RUNTIME_DIR
-
-# Create entrypoint script
+# Create entrypoint script with proper environment setup
+WORKDIR /root/ardu_ws/
 RUN echo '#!/bin/bash\n\
 source /opt/ros/humble/setup.bash\n\
 source /root/ardu_ws/install/setup.bash\n\
 export PATH=$PATH:/root/ardu_ws/src/ardupilot/Tools/autotest\n\
+\n\
+# Unset problematic environment variables\n\
+unset GAZEBO_MASTER_URI\n\
+unset IGN_IP\n\
+unset IGN_PARTITION\n\
+unset ROS_DOMAIN_ID\n\
+unset RMW_IMPLEMENTATION\n\
+\n\
+# Set correct Gazebo Sim environment variables\n\
+export GZ_PARTITION=$(hostname)\n\
+export GZ_IP=127.0.0.1\n\
+export GZ_VERBOSE=4\n\
+export GZ_DISCOVERY_MULTICAST=1\n\
+export GZ_TRANSPORT_TOPIC_STATISTICS=1\n\
+\n\
 exec "$@"' > /root/entrypoint.sh && \
 chmod +x /root/entrypoint.sh
 

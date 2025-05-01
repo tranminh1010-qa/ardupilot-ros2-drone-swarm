@@ -45,14 +45,19 @@ If you have GPU and Cuda runtime set up on the device, you can also run the foll
 ```bash
 xhost +local:docker
 docker run -it --net=host \
+  --ipc=host \
   --add-host=host.docker.internal:host-gateway \
-  --name="ardu_gpu" \
+  --name="ardupilot_ros2" \
   --env="DISPLAY=$DISPLAY" \
   --env="QT_X11_NO_MITSHM=1" \
   --env="LIBGL_ALWAYS_INDIRECT=0" \
   --env="NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}" \
   --env="NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:+$NVIDIA_DRIVER_CAPABILITIES,}graphics" \
   --env="GZ_GPU_DEBUG=1" \
+  --env="GZ_PARTITION=$(hostname -f)" \
+  --env="GZ_IP=127.0.0.1" \
+  --env="GZ_DISCOVERY_MULTICAST=1" \
+  --env="GZ_TRANSPORT_TOPIC_STATISTICS=1" \
   --env="ROS_DOMAIN_ID=42" \
   --env="RMW_IMPLEMENTATION=rmw_cyclonedds_cpp" \
   --env="GZ_RENDERING_ENGINE=ogre2" \
@@ -68,7 +73,7 @@ docker run -it --net=host \
   --cpus=4 --memory=8g \
   --ulimit rtprio=99 \
   --security-opt seccomp=unconfined \
-  ardupilot-ros2
+  ardu_edited
 ```
 The terminal should hang, to continue, open a new terminal and keep working. 
 
@@ -124,7 +129,6 @@ Finally, to run the simulation in gazebo, run the following in yet another termi
 ros2 launch ardupilot_gz_bringup iris_runway.launch.py
 ```
 
-
 # 5. Swarm Drone Simulation Setup
 
 ### Update Your Repository
@@ -167,6 +171,15 @@ Open an ubuntu terminal and execute the following command to start Gazebo:
 ```bash
 gz sim -v4 -r swarm_drone.sdf
 ```
+Make sure the following variables are set on the host machine and docker machine - they need to match
+```bash
+# Host machine environment variables
+export GZ_PARTITION=$(hostname)
+export GZ_IP=127.0.0.1
+export GZ_VERBOSE=4
+export GZ_DISCOVERY_MULTICAST=1
+export GZ_TRANSPORT_TOPIC_STATISTICS=1
+```
 
 In the case of running the gazebo on the host machine, read the README_gazebo.md instructions.
 ### Launch the Swarm Control
@@ -191,11 +204,11 @@ cd /root/ardu_ws/src/swarm_control/custom-files
 
 In case there is an issue creating a connection between the ros2 nodes and the ardupilot SIL, let's start by checking running processes
 ```bash
-sudo lsof -i :5760 #Change the port depending on the situatuin
+sudo lsof -i :5760 #Change the port depending on the situation
 sudo kill -9 <PID>  # Replace <PID> with the process ID from the lsof command
 ```
 
-Now, we check if it is a permission issue. Close down all running operations, and run as a non-root user
+Now, we check if it is a permission issue. Close down all running operations and run as a non-root user
 ```bash
 pkill -f arducopter
 pkill -f mavproxy
@@ -205,4 +218,11 @@ pkill -f mavproxy
 If you get the error message: "xterm is not installed. Please install it first.", then you need to run this command inside the docker container to install xterm:
 ```bash
 apt-get update && apt-get install -y xterm
+```
+
+If you get issues during build with micro_ros_messages, remove the build directory for it then try colcon build again
+```bash
+rm -rf /root/ardu_ws/build/micro_ros_msgs/ament_cmake_python/micro_ros_msgs/micro_ros_msgs
+cd ~/ardu_ws
+rm -rf build/micro_ros_msgs install/micro_ros_msgs log/build_*/micro_ros_msgs
 ```
