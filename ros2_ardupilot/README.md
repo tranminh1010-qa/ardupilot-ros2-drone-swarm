@@ -70,10 +70,10 @@ docker run -it --net=host \
   --runtime=nvidia \
   --gpus all \
   --shm-size=1g \
-  --cpus=4 --memory=8g \
+  --cpus=4 --memory=12g \
   --ulimit rtprio=99 \
   --security-opt seccomp=unconfined \
-  ardu_edited
+  ardu_gpu
 ```
 The terminal should hang, to continue, open a new terminal and keep working. 
 
@@ -91,7 +91,7 @@ Then we use the following to test everything is working correctly once inside th
 
 ```bash
 source /opt/ros/humble/setup.bash
-colcon build --packages-up-to ardupilot_dds_tests
+colcon build 
 colcon test-result --all --verbose
 ```
 If all the tests pass, then the environment is set up correctly, and we are ready to start running the code. 
@@ -159,12 +159,14 @@ cd ~/ardu_ws
 ````
 
 ### Set Up Scripts and Launch Files
+
+Initially make sure all packages are built
 ```bash
 cd ~/ardu_ws/src
-colcon build --packages-select swarm_control ardupilot_msgs micro_ros_msgs micro_ros_agent ardupilot_sitl --symlink-install
+colcon build
 source install/setup.bash
 ```
-
+Then after making changes to the source code, you can simply use `colcon build --packages-select swarm_control --symlink-install` to only rebuild the package. The use of --symlink-install will make code changes reflect without rebuilding (unless you change the package structure to update dependencies)
 ## 8. Launch Simulation
 ### Launch Gazebo
 Open an ubuntu terminal and execute the following command to start Gazebo:
@@ -226,3 +228,27 @@ rm -rf /root/ardu_ws/build/micro_ros_msgs/ament_cmake_python/micro_ros_msgs/micr
 cd ~/ardu_ws
 rm -rf build/micro_ros_msgs install/micro_ros_msgs log/build_*/micro_ros_msgs
 ```
+
+If some isntances fail to start because they did not shut down correctly. You can see what is still running and terminate it
+```bash
+# Check for all ArduPilot SITL processes
+ps aux | grep -E "arducopter|arduplane|arduhexa|ardurover" | grep -v grep
+
+# Check for specific instance numbers
+ps aux | grep "instance" | grep -v grep
+
+# Check all related processes (SITL, MAVProxy, etc.)
+ps aux | grep -E "ardu|mavproxy|sitl" | grep -v grep
+```
+You can also check which processes are using specific ports:
+```bash
+# Install netstat if not available
+apt-get update && apt-get install -y net-tools
+
+# Check ports used by ArduPilot SITL
+netstat -tuln | grep -E "5760|6180|14550|5501"
+# Check all relevant ports
+sudo lsof -i -P | grep -E "5760|6180|14550|5501|2019"
+```
+
+You can terminate running processes by running `kill -9 $pid`

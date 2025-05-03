@@ -20,17 +20,22 @@ include_directories(
   ${mavros_msgs_INCLUDE_DIRS}
   ${fastcdr_INCLUDE_DIRS}
 )
-file(GLOB SCRIPT_FILES
-  "scripts/*"
-  "utility/*"
-)
 
+# Python packages
 ament_python_install_package(scripts)
 ament_python_install_package(utility)
 
-# Install Python scripts
+# Install Python scripts (exclude __pycache__ directories)
+file(GLOB SCRIPT_FILES_SCRIPTS
+  "scripts/*.py"
+)
+file(GLOB SCRIPT_FILES_UTILITY
+  "utility/*.py"
+)
+
 install(PROGRAMS
-   ${SCRIPT_FILES}
+  ${SCRIPT_FILES_SCRIPTS}
+  ${SCRIPT_FILES_UTILITY}
   DESTINATION lib/${PROJECT_NAME}
 )
 
