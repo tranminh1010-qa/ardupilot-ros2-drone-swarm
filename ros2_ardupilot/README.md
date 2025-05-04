@@ -229,7 +229,7 @@ cd ~/ardu_ws
 rm -rf build/micro_ros_msgs install/micro_ros_msgs log/build_*/micro_ros_msgs
 ```
 
-If some isntances fail to start because they did not shut down correctly. You can see what is still running and terminate it
+If some instances fail to start because they did not shut down correctly. You can see what is still running and terminate it
 ```bash
 # Check for all ArduPilot SITL processes
 ps aux | grep -E "arducopter|arduplane|arduhexa|ardurover" | grep -v grep

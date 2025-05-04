@@ -24,9 +24,9 @@ class DroneState(enum.Enum):
 
 
 class BaseDrone(Node):
-    def __init__(self, node_name, drone_id, mavlink_connection, assigned_waypoints=None):
+    def __init__(self, node_name, drone_id=None, mavlink_connection=None, assigned_waypoints=None):
         super().__init__(node_name)
-        self.waypoints = None
+        self.waypoints = assigned_waypoints
         self.takeoff_complete_publisher = None
         self.imu_subscription = None
         self.imu_logger = None
@@ -48,14 +48,6 @@ class BaseDrone(Node):
         self.connection_timer = self.create_timer(1.0, self.connection_check)
         self.position_noise = NoiseInjector(mean=0.0, std_dev=0.3, time_correlation=0.8)
         self.velocity_noise = NoiseInjector(mean=0.0, std_dev=0.1, time_correlation=0.6)
-
-        # If no waypoints are assigned, create default circular waypoints
-        if assigned_waypoints is None:
-            self.waypoints = generate_circular_waypoints()
-        else:
-            self.waypoints = eval(assigned_waypoints)
-        self.get_logger().info("waypoints assigned to drone {}: {}".format(drone_id, self.waypoints))
-
 
     def connection_check(self):
         if self.state != DroneState.CONNECTED:
@@ -409,10 +401,21 @@ def main(args=None):
     # Retrieve parameters from the ROS parameter server (if set)
     drone_id_param = node.declare_parameter('drone_id', 1).value
     mavlink_connection_param = node.declare_parameter('mavlink_connection', 'udp:localhost:14551').value
+    assigned_waypoints = node.declare_parameter('assigned_waypoints', '').value
 
     # Update the node's attributes if parameters are provided
     node.drone_id = drone_id_param
     node.mavlink_connection = mavlink_connection_param
+    node.assigned_waypoints = assigned_waypoints
+
+    if not assigned_waypoints or assigned_waypoints == '':
+        node.waypoints = generate_circular_waypoints()
+        node.get_logger().info(
+            f"no waypoints assigned to drone {node.drone_id}:, generating points: {node.waypoints}")
+    else:
+        node.waypoints = eval(assigned_waypoints)
+        node.get_logger().info(f"assigned_waypoints assigned to drone {node.drone_id}: {node.waypoints}")
+
 
     try:
         rclpy.spin(node)

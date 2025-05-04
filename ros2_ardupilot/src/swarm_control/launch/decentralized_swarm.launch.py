@@ -8,14 +8,13 @@ from launch.event_handlers import OnProcessExit
 from launch.actions import RegisterEventHandler
 from ament_index_python.packages import get_package_share_directory
 
-from scripts.points_distributor import split_waypoints, generate_circular_waypoints
+from scripts.points_distributor import generate_grid_waypoints, split_by_sector
 from utility.launch_utils import LaunchUtils
 from scripts.command_generator import CommandGenerator
 
 
 def generate_launch_description():
     try:
-        # Configuration
         num_drones = 3
         bringup_dir = get_package_share_directory('ardupilot_gazebo')
         sdf_path = os.path.join(bringup_dir, 'models', 'iris_with_ardupilot', 'model.sdf')
@@ -27,17 +26,10 @@ def generate_launch_description():
         utils = LaunchUtils(sdf_path, param_file)
         cmd_gen = CommandGenerator(host_address, param_file)
 
-        # Verify required files exist
         utils.verify_paths()
         print(f"Using parameter file: {param_file}")
-
-        # Setup environment variables
         common_env = cmd_gen.get_common_env(ros_domain_id)
-
-        # Initialize launch sequence
         launch_sequence = []
-
-        # Build ArduPilot
         build_action = ExecuteProcess(
             cmd=cmd_gen.get_build_cmd(),
             output='screen',
@@ -47,13 +39,13 @@ def generate_launch_description():
         launch_sequence.append(LogInfo(msg="Building Ardupilot..."))
         launch_sequence.append(build_action)
 
-        # Prepare for SITL instances
         sitl_actions = []
         drone_nodes = []
 
         # Generate waypoints
-        wps = generate_circular_waypoints()
-        chunks = split_waypoints(wps, num_drones)
+        wps = generate_grid_waypoints(field_size=60.0, num_points=6, height=8.0)
+        LogInfo(msg=f"Generated {len(wps)} waypoints.")
+        chunks = split_by_sector(wps, num_drones)
 
         # Setup notification for build completion
         launch_sequence.append(
@@ -73,7 +65,6 @@ def generate_launch_description():
             gazebo_port = 14550 + (i * 10)
             wp = chunks[i]
 
-            # Create SITL command
             sitl_cmd = cmd_gen.get_sitl_cmd(instance, drone_id, ros_port, gazebo_port)
 
             sitl_action = ExecuteProcess(
@@ -83,7 +74,6 @@ def generate_launch_description():
                 additional_env=common_env
             )
 
-            # Add to launch sequence with appropriate timing
             if i == 0:
                 launch_sequence.append(
                     RegisterEventHandler(
@@ -100,10 +90,7 @@ def generate_launch_description():
                         actions=[sitl_action]
                     )
                 )
-
             sitl_actions.append(sitl_action)
-
-            # Create ROS node
             drone_node = Node(
                 package='swarm_control',
                 executable='base_drone.py',
@@ -130,7 +117,6 @@ def generate_launch_description():
                 )
             )
 
-        # Add monitoring
         monitor_action = ExecuteProcess(
             cmd=cmd_gen.get_monitor_cmd(),
             output='screen',
