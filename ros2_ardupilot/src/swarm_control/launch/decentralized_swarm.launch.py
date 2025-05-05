@@ -23,7 +23,7 @@ def generate_launch_description():
     )
 
     # Launch Configuration
-    num_drones_config = LaunchConfiguration('num_drones')
+    LaunchConfiguration('num_drones')
 
     def launch_setup(context, *args, **kwargs):
         try:

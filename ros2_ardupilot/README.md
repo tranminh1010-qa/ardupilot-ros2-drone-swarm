@@ -129,28 +129,7 @@ Finally, to run the simulation in gazebo, run the following in yet another termi
 ros2 launch ardupilot_gz_bringup iris_runway.launch.py
 ```
 
-# 5. Swarm Drone Simulation Setup
-
-### Update Your Repository
-Ensure your repository is up to date before proceeding.
-
-### File Setup
-Navigate to your repository folder and move the required files:
-
-#### Copy World File
-```bash
-cd custom_gz/worlds
-cp swarm_drone.sdf ~/ardu_ws/src/ardupilot_gazebo/worlds/
-```
-
-#####  Copy Model Folder
-```bash
-cd custom_gz/models
-cp -r drone4 ~/ardu_ws/src/ardupilot_gazebo/models/
-```
-Note: you can run gazebo on a local machine, and ROS2/Ardupilot on docker then have them communicate through mavlink. You need to have gazebo installed and working correctly prior. 
-
-### 6. Running the code
+### 5. Running the code
 
 To run the code, we need to first build the workspace. This is done by running the following in the container.
 ```bash
@@ -167,7 +146,7 @@ colcon build
 source install/setup.bash
 ```
 Then after making changes to the source code, you can simply use `colcon build --packages-select swarm_control --symlink-install` to only rebuild the package. The use of --symlink-install will make code changes reflect without rebuilding (unless you change the package structure to update dependencies)
-## 8. Launch Simulation
+## 6. Launch Simulation
 ### Launch Gazebo
 Open an ubuntu terminal and execute the following command to start Gazebo:
 ```bash
@@ -184,9 +163,11 @@ export GZ_TRANSPORT_TOPIC_STATISTICS=1
 ```
 
 In the case of running the gazebo on the host machine, read the README_gazebo.md instructions.
+
+Changing the number of drones will require updating the world file, but it is a trivial change to add or remove drones
 ### Launch the Swarm Control
 ```bash
-ros2 launch swarm_control decentralized_swarm.launch.py
+ros2 launch swarm_control decentralized_swarm.launch.py num_drones:=4
 ```
 
 ## 9. Test Custom SITL Binary
@@ -203,6 +184,11 @@ cd /root/ardu_ws/src/swarm_control/custom-files
 ```
 
 ### 10. Debug Potential Issue (Optional)
+
+If you get an error in the log that display cannot be opened. Exit the container and run this again in the terminal. This will usually need to be run when you restart the computer
+```bash
+xhost +local:docker
+```
 
 In case there is an issue creating a connection between the ros2 nodes and the ardupilot SIL, let's start by checking running processes
 ```bash

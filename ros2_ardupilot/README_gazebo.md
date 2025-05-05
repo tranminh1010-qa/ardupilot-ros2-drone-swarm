@@ -65,8 +65,11 @@ You can add these to your Dockerfile or to the container's `.bashrc` to make the
 ### 5. Configure Gazebo on the Host
 
 1. Follow the [ArduPilot with Gazebo setup guide](https://ardupilot.org/dev/docs/sitl-with-gazebo.html)
-2. Copy any custom models to the appropriate Gazebo folders
-3. Rebuild your Gazebo workspace if required
+2. Rebuild your Gazebo workspace if required
+3. Add the path of the project custom models to the gazebo models path in bashrc. Example:
+```bash
+
+```
 
 ### 6. Launch Sequence
 

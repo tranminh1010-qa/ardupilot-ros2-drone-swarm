@@ -338,7 +338,8 @@
     <!-- Drone positions in the center of the world -->
     <!-- Drone 1 -->
     <include>
-      <uri>model://drone1</uri>
+      <uri>model://base_drone</uri>
+      <name>drone1</name>
       <pose degrees="true">45 50 5 0 0 0</pose>
       <link name="base_link">
         <sensor name="gps" type="gps">
@@ -350,7 +351,8 @@
 
     <!-- Drone 2 -->
     <include>
-      <uri>model://drone2</uri>
+       <uri>model://base_drone</uri>
+      <name>drone2</name>
       <pose degrees="true">50 50 5 0 0 0</pose>
       <link name="base_link">
         <sensor name="gps" type="gps">
@@ -362,7 +364,8 @@
 
     <!-- Drone 3 -->
     <include>
-      <uri>model://drone3</uri>
+       <uri>model://base_drone</uri>
+      <name>drone3</name>
       <pose degrees="true">55 50 5 0 0 0</pose>
       <link name="base_link">
         <sensor name="gps" type="gps">
@@ -374,7 +377,8 @@
 
     <!-- Drone 4 -->
     <include>
-      <uri>model://drone4</uri>
+       <uri>model://base_drone</uri>
+      <name>drone4</name>
       <pose degrees="true">60 50 5 0 0 0</pose>
       <link name="base_link">
         <sensor name="gps" type="gps">
