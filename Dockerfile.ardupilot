@@ -1,0 +1,172 @@
+# Dockerfile.ardupilot-fixed - ArduPilot with DDS support and Python fixes
+FROM ubuntu:22.04
+
+# Prevent interactive prompts during build
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install basic dependencies first
+RUN apt-get update && apt-get install --no-install-recommends -y \
+    build-essential \
+    ccache \
+    g++ \
+    gawk \
+    git \
+    make \
+    wget \
+    sudo \
+    software-properties-common \
+    python3 \
+    python3-pip \
+    python3-dev \
+    python3-setuptools \
+    python3-numpy \
+    python3-psutil \
+    python3-future \
+    cmake \
+    libasio-dev \
+    libtinyxml2-dev \
+    ca-certificates \
+    curl \
+    gnupg \
+    lsb-release \
+    openjdk-11-jdk \
+    gradle \
+    && rm -rf /var/lib/apt/lists/*
+
+# Add ROS 2 repository
+RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" > /etc/apt/sources.list.d/ros2.list
+
+# Install DDS packages from ROS repository
+RUN apt-get update && apt-get install --no-install-recommends -y \
+    libfastrtps-dev \
+    libfastcdr-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Micro XRCE-DDS Client (only this needs to be built from source)
+WORKDIR /tmp
+RUN git clone --recursive https://github.com/eProsima/Micro-XRCE-DDS-Client.git -b v2.4.1 && \
+    cd Micro-XRCE-DDS-Client && \
+    mkdir build && cd build && \
+    cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local -DUCLIENT_ENABLE_CLI=OFF && \
+    make -j$(nproc) && \
+    make install && \
+    ldconfig && \
+    cd / && rm -rf /tmp/Micro-XRCE-DDS-Client
+
+# Install Micro XRCE-DDS Gen (ArduPilot fork - FIXED VERSION!)
+WORKDIR /tmp
+RUN git clone --recurse-submodules https://github.com/ardupilot/Micro-XRCE-DDS-Gen.git && \
+    cd Micro-XRCE-DDS-Gen && \
+    ./gradlew assemble && \
+    mkdir -p /usr/local/share/microxrceddsgen && \
+    cp -r share/microxrceddsgen/* /usr/local/share/microxrceddsgen/ && \
+    mkdir -p /usr/local/bin && \
+    echo '#!/bin/bash' > /usr/local/bin/microxrceddsgen && \
+    echo 'java -jar /usr/local/share/microxrceddsgen/java/microxrceddsgen.jar "$@"' >> /usr/local/bin/microxrceddsgen && \
+    chmod +x /usr/local/bin/microxrceddsgen && \
+    cd / && rm -rf /tmp/Micro-XRCE-DDS-Gen
+
+# Verify microxrceddsgen installation
+RUN microxrceddsgen -version || echo "microxrceddsgen installed but version check failed - this is expected"
+
+# Fix Python compatibility issue with dronekit
+# Install Python packages with specific versions that work with Python 3.10
+RUN pip3 install --no-cache-dir -U \
+    future \
+    lxml \
+    pexpect \
+    empy==3.3.4 \
+    pymavlink \
+    pyserial \
+    pyudev \
+    matplotlib \
+    scipy
+
+# Install dronekit-python from fork that fixes collections issue
+RUN pip3 install --no-cache-dir git+https://github.com/dronekit/dronekit-python.git@master
+
+WORKDIR /root
+
+# Create workspace and clone ArduPilot
+RUN mkdir -p /root/ardu_ws/src && \
+    cd /root/ardu_ws/src && \
+    git clone --recurse-submodules https://github.com/ArduPilot/ardupilot.git && \
+    cd ardupilot && \
+    git submodule update --init --recursive
+
+# Build ArduPilot with DDS support
+WORKDIR /root/ardu_ws/src/ardupilot
+
+# Configure and build ArduPilot with DDS (using the correct setup)
+RUN ./waf distclean && \
+    ./waf configure --board sitl --enable-DDS && \
+    ./waf copter
+
+# Install ArduPilot to PATH
+ENV PATH="/root/ardu_ws/src/ardupilot/Tools/autotest:${PATH}"
+ENV PATH="/root/ardu_ws/src/ardupilot/build/sitl/bin:${PATH}"
+
+# Create directories for logs and scripts
+RUN mkdir -p /root/logs /root/scripts
+
+# Create a proper startup script for DDS
+RUN echo '#!/bin/bash\n\
+# Start ArduPilot SITL with DDS support\n\
+echo "Starting ArduPilot SITL with DDS..."\n\
+\n\
+# Set DDS environment variables\n\
+export DDS_AGENT_IP=${DDS_AGENT_IP:-127.0.0.1}\n\
+export DDS_AGENT_PORT=${DDS_AGENT_PORT:-2019}\n\
+export AP_DDS_UDP_PORT=${DDS_AGENT_PORT}\n\
+\n\
+# Set instance and sysid\n\
+INSTANCE=${INSTANCE:-0}\n\
+SYSID_THISMAV=${SYSID_THISMAV:-1}\n\
+\n\
+# Calculate ports\n\
+SIM_PORT_IN=$((5501 + INSTANCE * 10))\n\
+\n\
+# Start ArduPilot SITL with proper DDS settings\n\
+cd /root/ardu_ws/src/ardupilot\n\
+\n\
+# First, just run the binary with DDS to test\n\
+echo "Testing DDS connection to ${DDS_AGENT_IP}:${DDS_AGENT_PORT}"\n\
+\n\
+# Use sim_vehicle.py with DDS parameters\n\
+sim_vehicle.py \\\n\
+    --vehicle ArduCopter \\\n\
+    --no-rebuild \\\n\
+    --instance ${INSTANCE} \\\n\
+    --out udp:127.0.0.1:14550 \\\n\
+    --out udp:127.0.0.1:14551 \\\n\
+    --add-param-file /root/ardu_ws/src/ardupilot/libraries/AP_DDS/sitl_dds.param \\\n\
+    --custom-location=37.613532,-122.357191,0,0 \\\n\
+    --console \\\n\
+    --map\n' > /root/scripts/start_drone_container.sh
+
+RUN chmod +x /root/scripts/start_drone_container.sh
+
+# Create DDS parameters file
+RUN mkdir -p /root/ardu_ws/src/ardupilot/libraries/AP_DDS && \
+    echo '# DDS Parameters\n\
+DDS_ENABLE 1\n\
+SERIAL1_PROTOCOL 45\n\
+SERIAL1_BAUD 115\n' > /root/ardu_ws/src/ardupilot/libraries/AP_DDS/sitl_dds.param
+
+WORKDIR /root/ardu_ws/src/ardupilot
+
+# Set environment for DDS
+ENV ARDUPILOT_DDS=1
+ENV AP_DDS_UDP_PORT=2019
+
+# Expose ports based on startup script logic
+# DDS Agent port
+EXPOSE 2019/udp
+# Simulation ports: 5501 + (instance * 10)
+EXPOSE 5501-5591
+# MAVLink TCP ports (ArduPilot default range)
+EXPOSE 5760-5780
+EXPOSE 14550-14560/udp
+
+CMD ["/root/scripts/start_drone_container.sh"]

@@ -1,0 +1,171 @@
+# Dockerfile.ros2 - Enhanced ROS2 setup with multiple RMW implementations
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    TZ=UTC \
+    ROS_DISTRO=humble
+
+# Install basic dependencies
+RUN apt-get update && apt-get install -y \
+    curl gnupg lsb-release \
+    python3 python3-pip \
+    git cmake build-essential \
+    wget software-properties-common \
+    net-tools netcat-openbsd \
+    bc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Add ROS 2 repository
+RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null
+
+# Install ROS 2 with multiple RMW implementations
+RUN apt-get update && apt-get install -y \
+    ros-humble-ros-core \
+    ros-humble-ros-base \
+    ros-humble-desktop \
+    ros-humble-geometry-msgs \
+    ros-humble-sensor-msgs \
+    ros-humble-std-msgs \
+    ros-humble-nav-msgs \
+    ros-humble-mavros \
+    ros-humble-mavros-msgs \
+    ros-humble-mavros-extras \
+    ros-humble-rmw-fastrtps-cpp \
+    ros-humble-rmw-cyclonedds-cpp \
+    ros-humble-rmw-implementation \
+    python3-colcon-common-extensions \
+    python3-rosdep \
+    python3-argcomplete \
+    python3-vcstool \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python packages
+RUN pip3 install --no-cache-dir \
+    pymavlink dronekit \
+    geopy numpy scipy transforms3d \
+    matplotlib pandas \
+    setuptools wheel
+
+# Initialize rosdep and install GeographicLib
+RUN rosdep init && rosdep update
+RUN /opt/ros/humble/lib/mavros/install_geographiclib_datasets.sh
+
+# Create workspace directories
+# Copy startup scripts
+COPY scripts/start_swarm_controller.sh /root/scripts/
+RUN chmod +x /root/scripts/start_swarm_controller.sh
+
+WORKDIR /root
+RUN mkdir -p /root/ros2_ws/src \
+    /root/scripts \
+    /root/logs \
+    /root/config
+
+# Create enhanced startup script for MAVROS
+RUN echo '#!/bin/bash' > /root/scripts/start_mavros.sh && \
+    echo 'echo "Starting MAVROS bridges for multiple drones..."' >> /root/scripts/start_mavros.sh && \
+    echo 'source /opt/ros/humble/setup.bash' >> /root/scripts/start_mavros.sh && \
+    echo '' >> /root/scripts/start_mavros.sh && \
+    echo '# Get number of drones from environment or default to 4' >> /root/scripts/start_mavros.sh && \
+    echo 'NUM_DRONES=${NUM_DRONES:-4}' >> /root/scripts/start_mavros.sh && \
+    echo '' >> /root/scripts/start_mavros.sh && \
+    echo 'echo "Starting MAVROS for $NUM_DRONES drones..."' >> /root/scripts/start_mavros.sh && \
+    echo '' >> /root/scripts/start_mavros.sh && \
+    echo '# Start MAVROS for each drone' >> /root/scripts/start_mavros.sh && \
+    echo 'for i in $(seq 1 $NUM_DRONES); do' >> /root/scripts/start_mavros.sh && \
+    echo '    INSTANCE=$((i - 1))' >> /root/scripts/start_mavros.sh && \
+    echo '    MAVLINK_PORT=$((14550 + INSTANCE * 10))' >> /root/scripts/start_mavros.sh && \
+    echo '    ROS_PORT=$((14551 + INSTANCE * 10))' >> /root/scripts/start_mavros.sh && \
+    echo '    ' >> /root/scripts/start_mavros.sh && \
+    echo '    echo "Starting MAVROS for drone $i on ports $MAVLINK_PORT->$ROS_PORT"' >> /root/scripts/start_mavros.sh && \
+    echo '    ' >> /root/scripts/start_mavros.sh && \
+    echo '    # Start MAVROS in background (fix gcs_url parameter)' >> /root/scripts/start_mavros.sh && \
+    echo '    ros2 launch mavros apm.launch \' >> /root/scripts/start_mavros.sh && \
+    echo '        fcu_url:=udp://:$MAVLINK_PORT@localhost:$ROS_PORT \' >> /root/scripts/start_mavros.sh && \
+    echo '        target_system_id:=$i \' >> /root/scripts/start_mavros.sh && \
+    echo '        target_component_id:=1 \' >> /root/scripts/start_mavros.sh && \
+    echo '        &' >> /root/scripts/start_mavros.sh && \
+    echo '    ' >> /root/scripts/start_mavros.sh && \
+    echo '    sleep 2' >> /root/scripts/start_mavros.sh && \
+    echo 'done' >> /root/scripts/start_mavros.sh && \
+    echo '' >> /root/scripts/start_mavros.sh && \
+    echo 'echo "All MAVROS instances started"' >> /root/scripts/start_mavros.sh && \
+    echo 'wait' >> /root/scripts/start_mavros.sh && \
+    chmod +x /root/scripts/start_mavros.sh
+
+# Create enhanced test script
+RUN echo '#!/bin/bash' > /root/scripts/test.sh && \
+    echo 'echo "Testing ROS 2 and MAVROS..."' >> /root/scripts/test.sh && \
+    echo 'source /opt/ros/humble/setup.bash' >> /root/scripts/test.sh && \
+    echo '' >> /root/scripts/test.sh && \
+    echo 'echo "ROS 2 Environment:"' >> /root/scripts/test.sh && \
+    echo 'echo "  ROS_DISTRO: $ROS_DISTRO"' >> /root/scripts/test.sh && \
+    echo 'echo "  ROS_DOMAIN_ID: $ROS_DOMAIN_ID"' >> /root/scripts/test.sh && \
+    echo 'echo "  RMW_IMPLEMENTATION: $RMW_IMPLEMENTATION"' >> /root/scripts/test.sh && \
+    echo '' >> /root/scripts/test.sh && \
+    echo 'echo "Available RMW implementations:"' >> /root/scripts/test.sh && \
+    echo 'ros2 doctor --report | grep rmw || echo "No RMW info available"' >> /root/scripts/test.sh && \
+    echo '' >> /root/scripts/test.sh && \
+    echo 'echo "ROS 2 topics:"' >> /root/scripts/test.sh && \
+    echo 'timeout 5 ros2 topic list || echo "No topics found"' >> /root/scripts/test.sh && \
+    echo '' >> /root/scripts/test.sh && \
+    echo 'echo "ROS 2 nodes:"' >> /root/scripts/test.sh && \
+    echo 'timeout 5 ros2 node list || echo "No nodes found"' >> /root/scripts/test.sh && \
+    chmod +x /root/scripts/test.sh
+
+# Create workspace build script
+RUN echo '#!/bin/bash' > /root/scripts/build_workspace.sh && \
+    echo 'echo "Building ROS 2 workspace..."' >> /root/scripts/build_workspace.sh && \
+    echo 'source /opt/ros/humble/setup.bash' >> /root/scripts/build_workspace.sh && \
+    echo 'cd /root/ros2_ws' >> /root/scripts/build_workspace.sh && \
+    echo '' >> /root/scripts/build_workspace.sh && \
+    echo '# Check if there are packages to build' >> /root/scripts/build_workspace.sh && \
+    echo 'if [ -d "src" ] && [ "$(ls -A src)" ]; then' >> /root/scripts/build_workspace.sh && \
+    echo '    echo "Found packages, building..."' >> /root/scripts/build_workspace.sh && \
+    echo '    colcon build --symlink-install' >> /root/scripts/build_workspace.sh && \
+    echo '    echo "Build complete"' >> /root/scripts/build_workspace.sh && \
+    echo 'else' >> /root/scripts/build_workspace.sh && \
+    echo '    echo "No packages found in src directory"' >> /root/scripts/build_workspace.sh && \
+    echo 'fi' >> /root/scripts/build_workspace.sh && \
+    chmod +x /root/scripts/build_workspace.sh
+
+# Create info script
+RUN echo '#!/bin/bash' > /root/scripts/info.sh && \
+    echo 'echo "=== ArduPilot ROS 2 MAVROS Setup ==="' >> /root/scripts/info.sh && \
+    echo 'echo ""' >> /root/scripts/info.sh && \
+    echo 'echo "Environment:"' >> /root/scripts/info.sh && \
+    echo 'echo "  ROS_DISTRO: $ROS_DISTRO"' >> /root/scripts/info.sh && \
+    echo 'echo "  ROS_DOMAIN_ID: $ROS_DOMAIN_ID"' >> /root/scripts/info.sh && \
+    echo 'echo "  RMW_IMPLEMENTATION: $RMW_IMPLEMENTATION"' >> /root/scripts/info.sh && \
+    echo 'echo ""' >> /root/scripts/info.sh && \
+    echo 'echo "Usage:"' >> /root/scripts/info.sh && \
+    echo 'echo "1. Start ArduPilot SITL instances (done by drone containers)"' >> /root/scripts/info.sh && \
+    echo 'echo "2. Start MAVROS bridges: ./scripts/start_mavros.sh"' >> /root/scripts/info.sh && \
+    echo 'echo "3. Build workspace: ./scripts/build_workspace.sh"' >> /root/scripts/info.sh && \
+    echo 'echo "4. Test connection: ./scripts/test.sh"' >> /root/scripts/info.sh && \
+    echo 'echo ""' >> /root/scripts/info.sh && \
+    echo 'echo "Available scripts:"' >> /root/scripts/info.sh && \
+    echo 'echo "  ./scripts/start_mavros.sh - Start MAVROS bridges"' >> /root/scripts/info.sh && \
+    echo 'echo "  ./scripts/build_workspace.sh - Build ROS 2 workspace"' >> /root/scripts/info.sh && \
+    echo 'echo "  ./scripts/test.sh - Test ROS 2 connection"' >> /root/scripts/info.sh && \
+    echo 'echo "  ./scripts/info.sh - Show this information"' >> /root/scripts/info.sh && \
+    chmod +x /root/scripts/info.sh
+
+# Setup environment with both RMW implementations available
+RUN echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc && \
+    echo "export ROS_DOMAIN_ID=\${ROS_DOMAIN_ID:-1}" >> ~/.bashrc && \
+    echo "export RMW_IMPLEMENTATION=\${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}" >> ~/.bashrc && \
+    echo "if [ -f /root/ros2_ws/install/setup.bash ]; then" >> ~/.bashrc && \
+    echo "    source /root/ros2_ws/install/setup.bash" >> ~/.bashrc && \
+    echo "fi" >> ~/.bashrc
+
+# Set default environment variables
+ENV ROS_DOMAIN_ID=1
+ENV RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+
+WORKDIR /root
+
+# Default command
+CMD ["./scripts/info.sh"]

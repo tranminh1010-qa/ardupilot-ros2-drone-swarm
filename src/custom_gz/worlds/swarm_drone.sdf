@@ -347,6 +347,9 @@
           <update_rate>10</update_rate>
         </sensor>
       </link>
+     <plugin name="model_parameters" filename="libset_parameters.so">
+      <fdm_port_in>9002</fdm_port_in>
+    </plugin>
     </include>
 
     <!-- Drone 2 -->
@@ -360,6 +363,9 @@
           <update_rate>10</update_rate>
         </sensor>
       </link>
+      <plugin name="model_parameters" filename="libset_parameters.so">
+        <fdm_port_in>9012</fdm_port_in>
+      </plugin>
     </include>
 
     <!-- Drone 3 -->
@@ -373,6 +379,9 @@
           <update_rate>10</update_rate>
         </sensor>
       </link>
+      <plugin name="model_parameters" filename="libset_parameters.so">
+       <fdm_port_in>9022</fdm_port_in>
+     </plugin>
     </include>
 
     <!-- Drone 4 -->
@@ -386,6 +395,9 @@
           <update_rate>10</update_rate>
         </sensor>
       </link>
+        <plugin name="model_parameters" filename="libset_parameters.so">
+       <fdm_port_in>9032</fdm_port_in>
+     </plugin>
     </include>
 
   </world>

@@ -46,7 +46,7 @@ class CommandGenerator:
             'cd /root/ardu_ws/src/ardupilot && ./waf configure --board sitl && ./waf copter'
         ]
 
-    def get_sitl_cmd(self, instance: int, sysid: int, ros_port: int, gazebo_port: int) -> List[str]:
+    def get_sitl_cmd(self, instance: int, sysid: int, ros_port: int, gazebo_port: int, mavlink_port:int) -> List[str]:
         """
         Get command to start SITL instance
 
@@ -68,6 +68,7 @@ class CommandGenerator:
             f'--sysid', str(sysid),
             '--speedup', '1',
             f'--sim-address={self.host_address}',
+            '-w', f'/tmp/sitl_{instance}',  # use separate working directories
             '--custom-location=40.072842,-105.230575,1586,0',
             f'--out=udp:127.0.0.1:{ros_port}',
             f'--out=udp:{self.host_address}:{gazebo_port}',

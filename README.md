@@ -44,36 +44,63 @@ docker run -it --net=host \
 If you have GPU and Cuda runtime set up on the device, you can also run the following for much faster performance 
 ```bash
 xhost +local:docker
-docker run -it --net=host \
-  --ipc=host \
-  --add-host=host.docker.internal:host-gateway \
+# Optimized ArduPilot ROS2 Docker Command
+docker run -it \
   --name="ardupilot_ros2" \
-  --env="DISPLAY=$DISPLAY" \
-  --env="QT_X11_NO_MITSHM=1" \
-  --env="LIBGL_ALWAYS_INDIRECT=0" \
-  --env="NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}" \
-  --env="NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:+$NVIDIA_DRIVER_CAPABILITIES,}graphics" \
-  --env="GZ_GPU_DEBUG=1" \
-  --env="GZ_PARTITION=$(hostname -f)" \
-  --env="GZ_IP=127.0.0.1" \
-  --env="GZ_DISCOVERY_MULTICAST=1" \
-  --env="GZ_TRANSPORT_TOPIC_STATISTICS=1" \
-  --env="ROS_DOMAIN_ID=42" \
-  --env="RMW_IMPLEMENTATION=rmw_cyclonedds_cpp" \
-  --env="GZ_RENDERING_ENGINE=ogre2" \
-  --env="GZ_SIM_WORKER_THREADS=6" \
-  --device=/dev/dri:/dev/dri \
-  --volume="/tmp/.X11-unix:/tmp/.X11-unix:ro" \
-  --volume="$HOME/.Xauthority:/root/.Xauthority:rw" \
-  --volume="$(pwd)/src/swarm_control:/root/ardu_ws/src/swarm_control" \
-  --volume="$(pwd)/src/custom_gz:/root/ardu_ws/src/custom_gz" \
-  --runtime=nvidia \
+  --hostname="ardupilot-dev" \
+  --network=host \
+  --ipc=host \
+  --pid=host \
+  --privileged \
+  \
+  `# GPU Configuration` \
   --gpus all \
-  --shm-size=1g \
-  --cpus=4 --memory=12g \
-  --ulimit rtprio=99 \
-  --security-opt seccomp=unconfined \
-  ardu_gpu
+  --device=/dev/dri:/dev/dri \
+  \
+  `# Display & GUI` \
+  --env DISPLAY \
+  --env QT_X11_NO_MITSHM=1 \
+  --env LIBGL_ALWAYS_INDIRECT=0 \
+  --env XAUTHORITY=/tmp/.Xauth \
+  --volume /tmp/.X11-unix:/tmp/.X11-unix:ro \
+  --volume $HOME/.Xauthority:/tmp/.Xauth:ro \
+  \
+  `# NVIDIA GPU Settings` \
+  --env NVIDIA_VISIBLE_DEVICES=all \
+  --env NVIDIA_DRIVER_CAPABILITIES=all \
+  --env CUDA_VISIBLE_DEVICES=all \
+  \
+  `# Gazebo Configuration (Optimized)` \
+  --env GZ_RENDERING_ENGINE=ogre2 \
+  --env GZ_SIM_WORKER_THREADS=8 \
+  --env GZ_PARTITION=$(hostname -f) \
+  --env GZ_IP=127.0.0.1 \
+  --env GZ_DISCOVERY_MULTICAST=1 \
+  --env GZ_TRANSPORT_TOPIC_STATISTICS=0 \
+  --env GZ_VERBOSE=0 \
+  --env IGN_GAZEBO_PHYSICS_ENGINE=dart \
+  `# Performance Optimizations` \
+  --shm-size=2g \
+  --cpus=6 \
+  --memory=14g \
+  --memory-swap=16g \
+  \
+  `# System Capabilities` \
+  --cap-add=SYS_NICE \
+  --cap-add=SYS_PTRACE \
+  --cap-add=NET_ADMIN \
+  --ulimit rtprio=99:99 \
+  --ulimit memlock=-1:-1 \
+  --ulimit nofile=65536:65536 \
+  \
+  `# Volume Mounts (Optimized)` \
+  --volume "$(pwd)/src:/root/ardu_ws/src:cached" \
+  --volume "$(pwd)/config:/root/config:ro" \
+  --volume "$(pwd)/logs:/root/logs:delegated" \
+  --volume "/dev/input:/dev/input:ro" \
+  --volume "/run/udev:/run/udev:ro" \
+  ardu_edited \
+  bash
 ```
 The terminal should hang, to continue, open a new terminal and keep working. 
 
@@ -90,7 +117,6 @@ docker container exec -it ardupilot-ros2 /bin/bash
 Then we use the following to test everything is working correctly once inside the container
 
 ```bash
-source /opt/ros/humble/setup.bash
 colcon build 
 colcon test-result --all --verbose
 ```
@@ -118,14 +144,15 @@ ros2 launch ardupilot_sitl sitl_dds_udp.launch.py \
 
 In a separate terminal, run the following to see the list of publishers
 ```bash
-docker container exec -it ardupilot-ros2 /bin/bash
-source ~/ardu_ws/install/setup.bash
+docker container exec -it ardupilot_ros2 /bin/bash
 export ROS_DOMAIN_ID=0
 ros2  topic list
 ```
 
 Finally, to run the simulation in gazebo, run the following in yet another terminal
 ```bash
+docker container exec -it ardupilot_ros2 /bin/bash
+export ROS_DOMAIN_ID=0
 ros2 launch ardupilot_gz_bringup iris_runway.launch.py
 ```
 
