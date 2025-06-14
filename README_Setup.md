@@ -80,6 +80,8 @@ sleep 60
 
 ## GroundControlStation
 
+https://docs.qgroundcontrol.com/master/en/qgc-user-guide/getting_started/download_and_install.html
+
 After the install, run using the following
 ```bash
 chmod +x ./QGroundControl.AppImage

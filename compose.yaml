@@ -6,7 +6,7 @@ services:
   # Micro XRCE-DDS Agent (build from Dockerfile)
   dds_agent:
     build:
-      context: .
+      context: ./src/dockerfiles
       dockerfile: Dockerfile.dds-agent
     container_name: dds_agent
     network_mode: host
@@ -16,7 +16,7 @@ services:
   # ROS 2 swarm controller with direct DDS communication
   swarm_controller:
     build:
-      context: .
+      context: ./src/dockerfiles
       dockerfile: Dockerfile.ros2
     container_name: swarm_controller
     network_mode: host
@@ -26,13 +26,11 @@ services:
       - NUM_DRONES=${NUM_DRONES:-4}
       - DISPLAY=${DISPLAY}
       - QT_X11_NO_MITSHM=1
-    depends_on:
-      - dds_agent
     volumes:
       - ./src:/root/ros2_ws/src:cached
       - ./logs:/root/logs:delegated
-      - ./scripts:/root/scripts:ro
-      - ./config:/root/config:ro
+      - ./src/scripts:/root/scripts:ro
+      - ./src/dockerfiles/config:/root/config:ro
       # X11 forwarding
       - /tmp/.X11-unix:/tmp/.X11-unix:ro
       - ${HOME}/.Xauthority:/root/.Xauthority:rw
@@ -43,7 +41,7 @@ services:
   # Dynamic drone instances with DDS communication
   drone:
     build:
-      context: .
+      context: ./src/dockerfiles
       dockerfile: Dockerfile.ardupilot
     network_mode: host
     environment:
@@ -63,9 +61,9 @@ services:
       - GZ_TRANSPORT_TOPIC_STATISTICS=1
     volumes:
       - ./logs:/root/logs:delegated
-      - ./parameters:/root/parameters:ro  # Mount parameters directory
-      - ./scripts:/root/scripts:ro
-      - ./config:/root/config:ro
+      - ./src/swarm_control/parameters:/root/parameters:ro  # Mount parameters directory
+      - ./src/scripts:/root/scripts:ro
+      - ./src/dockerfiles/config:/root/config:ro
     command: [ "/root/scripts/start_drone_container.sh" ]
 
   # Optional: ROS 2 tools container for debugging
@@ -75,7 +73,7 @@ services:
     network_mode: host
     environment:
       - ROS_DOMAIN_ID=1
-      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+      - RMW_IMPLEMENTATION=rmw_cyclonedx_cpp
     volumes:
       - ./src:/root/ros2_ws/src:cached
     command: >

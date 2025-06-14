@@ -1,17 +1,10 @@
 #!/bin/bash
-
-# Simplified ArduPilot SITL with DDS startup script
-
 echo "=== ArduPilot SITL with DDS Starting ==="
 
 # Get instance number from container name or environment
 CONTAINER_NAME=$(hostname)
-INSTANCE_NUM=$(echo "$CONTAINER_NAME" | grep -o '[0-9]\+$')
-
-# Fallback if no number in hostname
-if [ -z "$INSTANCE_NUM" ]; then
-    INSTANCE_NUM=${DRONE_ID:-1}
-fi
+INSTANCE_NUM=$(echo "$CONTAINER_NAME" | grep -o '[0-9]')
+INSTANCE_NUM=${INSTANCE_NUM:-${DRONE_ID:-1}}
 
 echo "Container: $CONTAINER_NAME"
 echo "Instance: $INSTANCE_NUM"
@@ -29,35 +22,32 @@ echo "MAVLink Port: $MAVLINK_PORT"
 echo "Sim Port: $SIM_PORT"
 echo "DDS Agent: $DDS_AGENT_HOST:$DDS_AGENT_PORT"
 
-# Wait for DDS agent
-echo "Waiting for DDS agent..."
-sleep $((INSTANCE_NUM * 3))
+# Wait for DDS agent with staggered startup
+echo "Waiting for DDS agent... (${INSTANCE_NUM}s delay)"
+sleep $INSTANCE_NUM
 
-# Create working directory
-WORK_DIR="/tmp/sitl_${ARDU_INSTANCE}"
-mkdir -p "$WORK_DIR"
-mkdir -p /root/logs
-cd "$WORK_DIR"
-
-# Path to parameter file
+# Use external parameter file
 PARAM_FILE="/root/parameters/dds_swarm.parm"
 if [ ! -f "$PARAM_FILE" ]; then
     echo "❌ Parameter file not found: $PARAM_FILE"
-    echo "Creating basic parameter file..."
-    mkdir -p /root/parameters
-    cat > "$PARAM_FILE" << 'PARAM_EOF'
-DDS_ENABLE 1
-DDS_UDP_PORT 2019
-SERIAL1_PROTOCOL 45
-SERIAL1_BAUD 115
-ARMING_CHECK 0
-BRD_SAFETY_DEFLT 0
-PARAM_EOF
+    echo "Make sure parameters directory is mounted as volume"
+    exit 1
 fi
 
 echo "Using parameter file: $PARAM_FILE"
 
-# Start ArduPilot SITL
+# Create temporary parameter file with correct SYSID
+TEMP_PARAM_FILE="/tmp/drone_${INSTANCE_NUM}.parm"
+cp "$PARAM_FILE" "$TEMP_PARAM_FILE"
+sed -i "s/SYSID_THISMAV.*/SYSID_THISMAV $INSTANCE_NUM/" "$TEMP_PARAM_FILE"
+
+# Create working directory and logs
+mkdir -p "/tmp/sitl_${ARDU_INSTANCE}" /root/logs
+
+# Change to ArduPilot directory
+cd /root/ardu_ws/src/ardupilot
+
+# Start ArduPilot SITL without backgrounding - let it run in foreground
 echo "Starting ArduPilot SITL..."
 
 sim_vehicle.py \
@@ -68,39 +58,7 @@ sim_vehicle.py \
     --no-rebuild \
     --speedup ${SPEEDUP:-1} \
     --sim-address ${SIM_ADDRESS:-127.0.0.1}:$SIM_PORT \
-    --location 40.072842,-105.230575,1586,0 \
+    -L KSFO \
     --out=udp:127.0.0.1:$MAVLINK_PORT \
-    --add-param-file "$PARAM_FILE" \
-    --console \
-    > /root/logs/sitl_drone_${INSTANCE_NUM}.log 2>&1 &
-
-SITL_PID=$!
-echo "SITL started with PID: $SITL_PID"
-
-# Wait and verify startup
-echo "Waiting for SITL to initialize..."
-sleep 15
-
-if kill -0 $SITL_PID 2>/dev/null; then
-    echo "✅ SITL running successfully"
-    echo "📋 Logs: /root/logs/sitl_drone_${INSTANCE_NUM}.log"
-    echo "🔗 MAVLink: udp:127.0.0.1:$MAVLINK_PORT"
-    echo "📡 DDS Agent: $DDS_AGENT_HOST:$DDS_AGENT_PORT"
-else
-    echo "❌ SITL failed to start"
-    if [ -f "/root/logs/sitl_drone_${INSTANCE_NUM}.log" ]; then
-        echo "Last 10 lines of log:"
-        tail -10 "/root/logs/sitl_drone_${INSTANCE_NUM}.log"
-    fi
-    exit 1
-fi
-
-echo "=== Container Ready ==="
-
-# Keep container alive and monitor SITL
-while kill -0 $SITL_PID 2>/dev/null; do
-    sleep 10
-done
-
-echo "❌ SITL process died"
-exit 1
+    --add-param-file "$TEMP_PARAM_FILE" \
+    --console
