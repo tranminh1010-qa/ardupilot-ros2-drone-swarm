@@ -63,12 +63,10 @@ services:
       - GZ_TRANSPORT_TOPIC_STATISTICS=1
     volumes:
       - ./logs:/root/logs:delegated
-      - ./src/swarm_control:/root/ardu_ws/src/swarm_control:cached
-      - ./src/custom_gz:/root/ardu_ws/src/custom_gz:cached
-      - ./parameters:/root/parameters:ro
+      - ./parameters:/root/parameters:ro  # Mount parameters directory
       - ./scripts:/root/scripts:ro
       - ./config:/root/config:ro
-    command: ["/root/scripts/start_drone_container.sh"]
+    command: [ "/root/scripts/start_drone_container.sh" ]
 
   # Optional: ROS 2 tools container for debugging
   ros2_tools:

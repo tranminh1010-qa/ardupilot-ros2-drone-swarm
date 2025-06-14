@@ -1,9 +1,0 @@
-../Tools/autotest/sim_vehicle.py -v ArduCopter -f gazebo-d1 -I0
-../Tools/autotest/sim_vehicle.py -v ArduCopter -f gazebo-d2 -I1
-../Tools/autotest/sim_vehicle.py -v ArduCopter -f gazebo-d3 -I2
-
-roslaunch mavros apm3.launch fcu_url:=udp://:14550@ mavros_ns:=drone_1 tgt_system:=1
-gazebo iris_ardupilot_ap.world
-
-cd ./swarm_ap_ws/src/swarm_control/scripts
-python leader_swarm.py
