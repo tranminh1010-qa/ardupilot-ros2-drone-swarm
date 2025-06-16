@@ -63,6 +63,22 @@ graph TB
 ```
 
 
+## Netowrk Configuraiton
+
+SERIAL1 → DDS communication (ArduPilot ↔ ROS2)
+UDP → MAVLink for QGroundControl (ArduPilot ↔ QGC)
+```
+┌─────────────────┐    Serial     ┌─────────────────┐    DDS      ┌─────────────────┐
+│   ArduPilot     │────SERIAL1────│   DDS Agent     │─────────────│     ROS2        │
+│     SITL        │               │ MicroXRCEAgent  │             │   /ap/topics    │
+│                 │               └─────────────────┘             └─────────────────┘
+│                 │
+│                 │    UDP        ┌─────────────────┐
+│                 │────14550──────│ QGroundControl  │
+└─────────────────┘               │   (MAVLink)     │
+                                  └─────────────────┘
+```
+
 ## Docker and Docker Compose
 
 Make sure both are installed and working

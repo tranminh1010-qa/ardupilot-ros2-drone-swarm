@@ -1,13 +1,22 @@
 # DDS Configuration for ArduPilot Swarm
-# This file enables DDS communication for multi-drone operations
+# Serial port for DDS + UDP for QGroundControl (Real Hardware Setup)
 
-# === DDS Configuration ===
+# === DDS Configuration (Serial Mode) ===
 DDS_ENABLE 1
-DDS_UDP_PORT 2019
+# NO DDS_UDP_PORT - we're using serial only for DDS
 
-# Serial port for DDS communication
-SERIAL1_PROTOCOL 45
-SERIAL1_BAUD 115
+# === Serial Port Configuration ===
+# SERIAL1 dedicated to DDS communication for ROS2 (mimick real hardware)
+SERIAL1_PROTOCOL 45    # DDS XRCE protocol
+SERIAL1_BAUD 115       # 115200 baud rate for DDS
+
+# SERIAL0 (console) for MAVLink to QGroundControl
+SERIAL0_PROTOCOL 2     # MAVLink2 for QGC connection
+SERIAL0_BAUD 115       # 115200 baud
+
+# SERIAL2 for additional MAVLink outputs
+SERIAL2_PROTOCOL 2     # MAVLink2
+SERIAL2_BAUD 115       # 115200 baud
 
 # === Safety and Arming ===
 ARMING_CHECK 0

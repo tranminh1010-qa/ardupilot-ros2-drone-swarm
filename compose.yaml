@@ -1,19 +1,5 @@
-# DDS-based compose file
-# ArduPilot communicates directly with ROS 2 via DDS
-
 services:
-
-  # Micro XRCE-DDS Agent (build from Dockerfile)
-  dds_agent:
-    build:
-      context: ./src/dockerfiles
-      dockerfile: Dockerfile.dds-agent
-    container_name: dds_agent
-    network_mode: host
-    restart: unless-stopped
-    command: ["MicroXRCEAgent", "udp4", "-p", "2019", "-v", "6"]
-
-  # ROS 2 swarm controller with direct DDS communication
+  # ROS 2 swarm controller
   swarm_controller:
     build:
       context: ./src/dockerfiles
@@ -31,14 +17,13 @@ services:
       - ./logs:/root/logs:delegated
       - ./src/scripts:/root/scripts:ro
       - ./src/dockerfiles/config:/root/config:ro
-      # X11 forwarding
       - /tmp/.X11-unix:/tmp/.X11-unix:ro
       - ${HOME}/.Xauthority:/root/.Xauthority:rw
     devices:
       - /dev/dri:/dev/dri
     command: ["/root/scripts/start_swarm_controller.sh"]
 
-  # Dynamic drone instances with DDS communication
+  # Drone instances with Serial DDS + UDP MAVLink
   drone:
     build:
       context: ./src/dockerfiles
@@ -50,10 +35,6 @@ services:
       - MODEL=gazebo-iris
       - SPEEDUP=1
       - NUM_DRONES=${NUM_DRONES:-4}
-      # DDS configuration
-      - DDS_AGENT_IP=127.0.0.1
-      - DDS_AGENT_PORT=2019
-      # Gazebo environment
       - GZ_PARTITION=${GZ_PARTITION:-$(hostname)}
       - GZ_IP=127.0.0.1
       - GZ_VERBOSE=4
@@ -61,28 +42,33 @@ services:
       - GZ_TRANSPORT_TOPIC_STATISTICS=1
     volumes:
       - ./logs:/root/logs:delegated
-      - ./src/swarm_control/parameters:/root/parameters:ro  # Mount parameters directory
+      - ./src/swarm_control/parameters:/root/parameters:ro
       - ./src/scripts:/root/scripts:ro
       - ./src/dockerfiles/config:/root/config:ro
-    command: [ "/root/scripts/start_drone_container.sh" ]
+    command: ["/root/scripts/start_drone_container.sh"]
 
-  # Optional: ROS 2 tools container for debugging
+  # ROS 2 tools for debugging
   ros2_tools:
     image: osrf/ros:humble-desktop
     container_name: ros2_tools
     network_mode: host
     environment:
       - ROS_DOMAIN_ID=1
-      - RMW_IMPLEMENTATION=rmw_cyclonedx_cpp
+      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
     volumes:
       - ./src:/root/ros2_ws/src:cached
     command: >
       bash -c "
         source /opt/ros/humble/setup.bash
-        echo 'ROS 2 tools ready. Available commands:'
-        echo '  ros2 topic list'
+        echo 'ROS 2 Debug Tools Ready:'
+        echo '  ros2 topic list | grep ap/'
         echo '  ros2 topic echo /ap/pose/filtered'
-        echo '  ros2 service list'
+        echo '  ros2 topic hz /ap/time'
+        echo ''
+        echo 'QGroundControl Connections:'
+        echo '  Drone 1: UDP 127.0.0.1:14550'
+        echo '  Drone 2: UDP 127.0.0.1:14560'
+        echo '  Drone 3: UDP 127.0.0.1:14570'
         tail -f /dev/null
       "
 

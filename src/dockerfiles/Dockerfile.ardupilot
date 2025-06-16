@@ -3,13 +3,15 @@ FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install all dependencies in one layer
+# Install all dependencies in one layer including serial port tools
 RUN apt-get update && apt-get install --no-install-recommends -y \
     build-essential ccache g++ gawk git make wget sudo \
     software-properties-common python3 python3-pip python3-dev \
     python3-setuptools python3-numpy python3-psutil python3-future \
     cmake libasio-dev libtinyxml2-dev ca-certificates curl gnupg \
     lsb-release openjdk-11-jdk gradle \
+    netcat-openbsd iproute2 iputils-ping \
+    socat screen minicom \
     && rm -rf /var/lib/apt/lists/*
 
 # Add ROS 2 repository and install DDS packages
@@ -33,6 +35,16 @@ RUN git clone --recursive https://github.com/eProsima/Micro-XRCE-DDS-Client.git 
     && make -j$(nproc) && make install && ldconfig \
     && cd / && rm -rf /tmp/Micro-XRCE-DDS-Client
 
+# Install Micro XRCE-DDS Agent (needed for serial DDS communication)
+WORKDIR /tmp
+RUN git clone --recursive https://github.com/eProsima/Micro-XRCE-DDS-Agent.git \
+    && cd Micro-XRCE-DDS-Agent && mkdir build && cd build \
+    && cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local \
+    && make -j$(nproc) && make install && ldconfig \
+    && cp /usr/local/bin/MicroXRCEAgent /usr/bin/ \
+    && which MicroXRCEAgent \
+    && cd / && rm -rf /tmp/Micro-XRCE-DDS-Agent
+
 # Install Micro XRCE-DDS Gen
 RUN git clone --recurse-submodules https://github.com/ardupilot/Micro-XRCE-DDS-Gen.git \
     && cd Micro-XRCE-DDS-Gen && ./gradlew assemble \
@@ -52,12 +64,21 @@ RUN mkdir -p /root/ardu_ws/src && cd /root/ardu_ws/src \
 
 RUN pip3 install mavproxy
 
-# Set environment variables
+# Set environment variables and PATH
 ENV PATH="/root/ardu_ws/src/ardupilot/Tools/autotest:${PATH}"
 ENV PATH="/root/ardu_ws/src/ardupilot/build/sitl/bin:${PATH}"
+ENV PATH="/usr/local/bin:/usr/bin:${PATH}"
 ENV PYTHONPATH="/root/ardu_ws/src/ardupilot/Tools/autotest:${PYTHONPATH}"
 ENV ARDUPILOT_DDS=1
 ENV AP_DDS_UDP_PORT=2019
+
+# Verify installations
+RUN echo "=== Verifying installations ===" \
+    && which python3 && python3 --version \
+    && which socat && socat -V | head -1 \
+    && which MicroXRCEAgent && MicroXRCEAgent --help | head -3 \
+    && ls -la /usr/local/bin/MicroXRCEAgent \
+    && echo "=== All tools verified ==="
 
 # Create basic directory structure
 RUN mkdir -p /root/logs
