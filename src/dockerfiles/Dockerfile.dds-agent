@@ -27,8 +27,8 @@ RUN git clone https://github.com/eProsima/Micro-XRCE-DDS-Agent.git && \
 WORKDIR /root
 
 # Default to UDP on port 2019
-EXPOSE 2019/udp
-EXPOSE 2019/tcp
+# Expose necessary ports
+EXPOSE 2019/udp 5501-5591 5760-5780 14550-14750/udp 9002-9052/udp
 
 # Run the agent
 CMD ["MicroXRCEAgent", "udp4", "-p", "2019", "-v", "6"]

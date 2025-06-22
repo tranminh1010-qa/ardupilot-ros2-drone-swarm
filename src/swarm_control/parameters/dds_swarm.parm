@@ -1,71 +1,15 @@
-# DDS Configuration for ArduPilot Swarm
-# Serial port for DDS + UDP for QGroundControl (Real Hardware Setup)
+# Core DDS Configuration (UDP-based)
+DDS_ENABLE = 1              # Enable DDS over UDP
+DDS_UDP_PORT = 2019         # Base port (will be offset per instance)
 
-# === DDS Configuration (Serial Mode) ===
-DDS_ENABLE 1
-# NO DDS_UDP_PORT - we're using serial only for DDS
+# Serial Protocol Assignment
+SERIAL0_PROTOCOL = 2        # MAVLink2 for QGroundControl
+SERIAL1_PROTOCOL = 2        # MAVLink2 telemetry (not DDS)
+SERIAL1_BAUD = 57          # 57600 baud for telemetry
 
-# === Serial Port Configuration ===
-# SERIAL1 dedicated to DDS communication for ROS2 (mimick real hardware)
-SERIAL1_PROTOCOL 45    # DDS XRCE protocol
-SERIAL1_BAUD 115       # 115200 baud rate for DDS
+# System Identification
+SYSID_THISMAV = 1          # Unique per drone (1-4)
+SYSID_MYGCS = 255          # Ground Control System ID
 
-# SERIAL0 (console) for MAVLink to QGroundControl
-SERIAL0_PROTOCOL 2     # MAVLink2 for QGC connection
-SERIAL0_BAUD 115       # 115200 baud
-
-# SERIAL2 for additional MAVLink outputs
-SERIAL2_PROTOCOL 2     # MAVLink2
-SERIAL2_BAUD 115       # 115200 baud
-
-# === Safety and Arming ===
-ARMING_CHECK 0
-BRD_SAFETY_DEFLT 0
-
-# === Failsafe Configuration ===
-FS_THR_ENABLE 1
-FS_THR_VALUE 910
-FS_OPTIONS 1
-
-# === EKF and AHRS Configuration ===
-EK2_ENABLE 1
-AHRS_EKF_TYPE 2
-AHRS_GPS_USE 1
-AHRS_GPS_MINSATS 6
-EK3_ENABLE 0
-EK2_IMU_MASK 3
-EK2_CHECK_SCALE 200
-EK2_GPS_TYPE 1
-EK2_ALT_SOURCE 1
-EK2_ACC_P_NSE 0.3
-EK2_GYRO_P_NSE 0.02
-EK2_ALT_M_NSE 1.0
-EK2_MAG_CAL 4
-EK2_MAG_P_NSE 0.003
-
-# === GPS Configuration ===
-EK2_GPS_CHECK 3
-EK2_POS_I_GATE 1000
-EK2_GLITCH_RAD 100
-GPS_AUTO_CONFIG 1
-GPS_AUTO_SWITCH 1
-
-# === Barometer Configuration ===
-BARO1_GND_PRESS 101325
-BARO_ALT_OFFSET 0
-
-# === SITL-specific Parameters ===
-SIM_GPS_DISABLE 0
-SIM_GPS_TYPE 1
-SIM_GPS_LOCKTIME 0
-SIM_GPS_ALT_OFS 0
-PILOT_THR_FILT 0
-INS_GYR_CAL 1
-SCHED_LOOP_RATE 300
-
-# === Compass Configuration ===
-COMPASS_ENABLE 1
-DISARM_DELAY 0
-
-# === Multi-drone Support ===
-# Note: SYSID_THISMAV will be set per instance via command line
+# Simulation Performance
+SIM_SPEEDUP = 1            # Real-time simulation

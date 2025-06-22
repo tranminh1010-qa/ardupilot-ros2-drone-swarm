@@ -22,7 +22,9 @@ RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o 
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python packages (including missing geocoder)
+# Replace the existing pip install line with:
 RUN pip3 install --no-cache-dir -U \
+    "numpy<2.0" \
     future lxml pexpect empy==3.3.4 pymavlink pyserial pyudev \
     matplotlib scipy geocoder geopy pyproj \
     && pip3 install --no-cache-dir git+https://github.com/dronekit/dronekit-python.git@master
@@ -60,7 +62,7 @@ WORKDIR /root
 RUN mkdir -p /root/ardu_ws/src && cd /root/ardu_ws/src \
     && git clone --recurse-submodules https://github.com/ArduPilot/ardupilot.git \
     && cd ardupilot && git submodule update --init --recursive \
-    && ./waf distclean && ./waf configure --board sitl --enable-DDS && ./waf copter
+    && ./waf distclean && ./waf configure --board sitl --debug && ./waf copter
 
 RUN pip3 install mavproxy
 
@@ -85,8 +87,11 @@ RUN mkdir -p /root/logs
 
 WORKDIR /root/ardu_ws/src/ardupilot
 
+#Networking and Debugging tools
+RUN apt-get update && apt-get install --no-install-recommends -y \
+  net-tools gdb lsof
 # Expose necessary ports
-EXPOSE 2019/udp 5501-5591 5760-5780 14550-14560/udp
+EXPOSE 2019/udp 5501-5591 5760-5780 14550-14750/udp 9002-9052/udp
 
 # Use external startup script
-CMD ["/root/scripts/start_drone_container.sh"]
+#CMD ["/root/scripts/start_drone_container.sh"]

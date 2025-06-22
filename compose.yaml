@@ -1,5 +1,4 @@
 services:
-  # ROS 2 swarm controller
   swarm_controller:
     build:
       context: ./src/dockerfiles
@@ -23,56 +22,45 @@ services:
       - /dev/dri:/dev/dri
     command: ["/root/scripts/start_swarm_controller.sh"]
 
+  dds_agent:
+    build:
+      context: ./src/dockerfiles
+      dockerfile: Dockerfile.dds-agent
+    container_name: dds_agent
+    network_mode: host
+    restart: unless-stopped
+    command: [ "MicroXRCEAgent", "udp4", "-p", "2019", "-v", "6" ]
+
+
   # Drone instances with Serial DDS + UDP MAVLink
-  drone:
+  drone_1:
     build:
       context: ./src/dockerfiles
       dockerfile: Dockerfile.ardupilot
     network_mode: host
     environment:
-      - ROS_DOMAIN_ID=1
-      - SIM_ADDRESS=127.0.0.1
-      - MODEL=gazebo-iris
-      - SPEEDUP=1
-      - NUM_DRONES=${NUM_DRONES:-4}
-      - GZ_PARTITION=${GZ_PARTITION:-$(hostname)}
-      - GZ_IP=127.0.0.1
-      - GZ_VERBOSE=4
-      - GZ_DISCOVERY_MULTICAST=1
-      - GZ_TRANSPORT_TOPIC_STATISTICS=1
+      - INSTANCE=0
+      - SYSID_THISMAV=1
+      - ROS_DOMAIN_ID=10
+      - DDS_UDP_PORT=2019
     volumes:
-      - ./logs:/root/logs:delegated
-      - ./src/swarm_control/parameters:/root/parameters:ro
+      - ./instance_0:/sitl/instance_0
+      - ./config:/config
       - ./src/scripts:/root/scripts:ro
-      - ./src/dockerfiles/config:/root/config:ro
     command: ["/root/scripts/start_drone_container.sh"]
-
-  # ROS 2 tools for debugging
-  ros2_tools:
-    image: osrf/ros:humble-desktop
-    container_name: ros2_tools
+    
+  drone_2:
+    build:
+      context: ./src/dockerfiles
+      dockerfile: Dockerfile.ardupilot  
     network_mode: host
     environment:
+      - INSTANCE=1
+      - SYSID_THISMAV=2
       - ROS_DOMAIN_ID=1
-      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+      - DDS_UDP_PORT=2020
     volumes:
-      - ./src:/root/ros2_ws/src:cached
-    command: >
-      bash -c "
-        source /opt/ros/humble/setup.bash
-        echo 'ROS 2 Debug Tools Ready:'
-        echo '  ros2 topic list | grep ap/'
-        echo '  ros2 topic echo /ap/pose/filtered'
-        echo '  ros2 topic hz /ap/time'
-        echo ''
-        echo 'QGroundControl Connections:'
-        echo '  Drone 1: UDP 127.0.0.1:14550'
-        echo '  Drone 2: UDP 127.0.0.1:14560'
-        echo '  Drone 3: UDP 127.0.0.1:14570'
-        tail -f /dev/null
-      "
-
-volumes:
-  logs:
-  parameters:
-  config:
+      - ./instance_1:/sitl/instance_1
+      - ./config:/config
+      - ./src/scripts:/root/scripts:ro
+    command: ["/root/scripts/start_drone_container.sh"]

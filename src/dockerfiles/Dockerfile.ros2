@@ -73,3 +73,6 @@ RUN echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc && \
     echo "if [ -f /root/ros2_ws/install/setup.bash ]; then" >> ~/.bashrc && \
     echo "    source /root/ros2_ws/install/setup.bash" >> ~/.bashrc && \
     echo "fi" >> ~/.bashrc
+
+# Expose necessary ports
+EXPOSE 2019/udp 5501-5591 5760-5780 14550-14750/udp 9002-9052/udp
