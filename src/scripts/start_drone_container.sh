@@ -1,10 +1,12 @@
 #!/bin/bash
+
 set -e
 
 # Environment variables from Docker Compose
 INSTANCE=${INSTANCE:-0}
 SYSID_THISMAV=${SYSID_THISMAV:-$((INSTANCE+1))}
 ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-$INSTANCE}
+MICRO_ROS_AGENT_PORT=${MICRO_ROS_AGENT_PORT:-2019}
 
 # Calculated ports
 MAVLINK_TCP_PORT=$((5760 + 10 * INSTANCE))
@@ -17,18 +19,20 @@ GAZEBO_JSON_PORT=$((9002 + 10 * INSTANCE))
 mkdir -p /sitl/instance_${INSTANCE}
 cd /sitl/instance_${INSTANCE}
 
-# Wait for DDS Agent startup
-sleep 5
+# UPDATE parameter file to set correct DDS port:
+echo "DDS_UDP_PORT=${MICRO_ROS_AGENT_PORT}" > /tmp/instance_dds.parm
+cat /config/dds_swarm.parm >> /tmp/instance_dds.parm
+cat /tmp/instance_dds.parm
 
 # Start ArduPilot SITL with Gazebo and DDS
-exec /ardupilot/Tools/autotest/sim_vehicle.py \
+
+cd -
+sim_vehicle.py \
     --vehicle ArduCopter \
-    --instance ${INSTANCE} \
-    --frame gazebo-iris \
-    --model=JSON \
-    --out udp:0.0.0.0:${MAVPROXY_UDP_PORT} \
-    --add-param-file=/config/dds_swarm.parm \
-    --console \
-    --map \
-    --no-rebuild \
-    --enable-dds
+    --out 127.0.0.0:${MAVPROXY_UDP_PORT} \
+    --out 127.0.0.0:${DDS_UDP_PORT} \
+    --instance "${INSTANCE}" \
+    --add-param-file=/tmp/instance_dds.parm
+    #--model=JSON \  #model and frame require gazebo to be running
+   # --frame gazebo-iris \
+

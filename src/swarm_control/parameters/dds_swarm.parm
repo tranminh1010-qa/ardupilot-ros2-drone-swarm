@@ -1,6 +1,5 @@
 # Core DDS Configuration (UDP-based)
 DDS_ENABLE = 1              # Enable DDS over UDP
-DDS_UDP_PORT = 2019         # Base port (will be offset per instance)
 
 # Serial Protocol Assignment
 SERIAL0_PROTOCOL = 2        # MAVLink2 for QGroundControl

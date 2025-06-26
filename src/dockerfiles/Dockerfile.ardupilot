@@ -29,40 +29,19 @@ RUN pip3 install --no-cache-dir -U \
     matplotlib scipy geocoder geopy pyproj \
     && pip3 install --no-cache-dir git+https://github.com/dronekit/dronekit-python.git@master
 
-# Install Micro XRCE-DDS Client
-WORKDIR /tmp
-RUN git clone --recursive https://github.com/eProsima/Micro-XRCE-DDS-Client.git -b v2.4.1 \
-    && cd Micro-XRCE-DDS-Client && mkdir build && cd build \
-    && cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local -DUCLIENT_ENABLE_CLI=OFF \
-    && make -j$(nproc) && make install && ldconfig \
-    && cd / && rm -rf /tmp/Micro-XRCE-DDS-Client
-
-# Install Micro XRCE-DDS Agent (needed for serial DDS communication)
-WORKDIR /tmp
-RUN git clone --recursive https://github.com/eProsima/Micro-XRCE-DDS-Agent.git \
-    && cd Micro-XRCE-DDS-Agent && mkdir build && cd build \
-    && cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local \
-    && make -j$(nproc) && make install && ldconfig \
-    && cp /usr/local/bin/MicroXRCEAgent /usr/bin/ \
-    && which MicroXRCEAgent \
-    && cd / && rm -rf /tmp/Micro-XRCE-DDS-Agent
-
-# Install Micro XRCE-DDS Gen
-RUN git clone --recurse-submodules https://github.com/ardupilot/Micro-XRCE-DDS-Gen.git \
-    && cd Micro-XRCE-DDS-Gen && ./gradlew assemble \
-    && mkdir -p /usr/local/share/microxrceddsgen \
-    && cp -r share/microxrceddsgen/* /usr/local/share/microxrceddsgen/ \
-    && mkdir -p /usr/local/bin \
-    && echo '#!/bin/bash\njava -jar /usr/local/share/microxrceddsgen/java/microxrceddsgen.jar "$@"' > /usr/local/bin/microxrceddsgen \
-    && chmod +x /usr/local/bin/microxrceddsgen \
-    && cd / && rm -rf /tmp/Micro-XRCE-DDS-Gen
+# Clone & install Micro-XRCE-DDS-Gen dependency
+RUN git clone --recurse-submodules https://github.com/ardupilot/Micro-XRCE-DDS-Gen.git /home/${USER_NAME}/Micro-XRCE-DDS-Gen \
+    && cd /home/${USER_NAME}/Micro-XRCE-DDS-Gen \
+    && ./gradlew assemble \
+    && export AP_ENV_LOC="/home/${USER_NAME}/.ardupilot_env" \
+    && echo "export PATH=\$PATH:$PWD/scripts" >> $AP_ENV_LOC
 
 # Clone and build ArduPilot
 WORKDIR /root
 RUN mkdir -p /root/ardu_ws/src && cd /root/ardu_ws/src \
     && git clone --recurse-submodules https://github.com/ArduPilot/ardupilot.git \
     && cd ardupilot && git submodule update --init --recursive \
-    && ./waf distclean && ./waf configure --board sitl --debug && ./waf copter
+    && ./waf distclean && ./waf configure --board sitl --debug
 
 RUN pip3 install mavproxy
 
@@ -78,8 +57,6 @@ ENV AP_DDS_UDP_PORT=2019
 RUN echo "=== Verifying installations ===" \
     && which python3 && python3 --version \
     && which socat && socat -V | head -1 \
-    && which MicroXRCEAgent && MicroXRCEAgent --help | head -3 \
-    && ls -la /usr/local/bin/MicroXRCEAgent \
     && echo "=== All tools verified ==="
 
 # Create basic directory structure
@@ -89,7 +66,11 @@ WORKDIR /root/ardu_ws/src/ardupilot
 
 #Networking and Debugging tools
 RUN apt-get update && apt-get install --no-install-recommends -y \
-  net-tools gdb lsof
+  net-tools gdb lsof pkg-config libgtk-3-dev
+
+RUN pip3 install --upgrade pip setuptools wheel
+
+RUN pip3 install -U wxPython
 # Expose necessary ports
 EXPOSE 2019/udp 5501-5591 5760-5780 14550-14750/udp 9002-9052/udp
 

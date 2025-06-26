@@ -7,7 +7,7 @@ services:
     network_mode: host
     environment:
       - ROS_DOMAIN_ID=1
-      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
       - NUM_DRONES=${NUM_DRONES:-4}
       - DISPLAY=${DISPLAY}
       - QT_X11_NO_MITSHM=1
@@ -20,17 +20,10 @@ services:
       - ${HOME}/.Xauthority:/root/.Xauthority:rw
     devices:
       - /dev/dri:/dev/dri
-    command: ["/root/scripts/start_swarm_controller.sh"]
-
-  dds_agent:
-    build:
-      context: ./src/dockerfiles
-      dockerfile: Dockerfile.dds-agent
-    container_name: dds_agent
-    network_mode: host
-    restart: unless-stopped
-    command: [ "MicroXRCEAgent", "udp4", "-p", "2019", "-v", "6" ]
-
+    stdin_open: true
+    tty: true
+    command: [ "/bin/bash" ]
+    #command: ["/root/scripts/start_swarm_controller.sh"]
 
   # Drone instances with Serial DDS + UDP MAVLink
   drone_1:
@@ -41,13 +34,17 @@ services:
     environment:
       - INSTANCE=0
       - SYSID_THISMAV=1
-      - ROS_DOMAIN_ID=10
+      - ROS_DOMAIN_ID=1
       - DDS_UDP_PORT=2019
+      - MICRO_ROS_AGENT_PORT=2019
     volumes:
       - ./instance_0:/sitl/instance_0
-      - ./config:/config
+      - ./src/swarm_control/parameters:/config
       - ./src/scripts:/root/scripts:ro
-    command: ["/root/scripts/start_drone_container.sh"]
+    stdin_open: true
+    tty: true
+    command: [ "/bin/bash" ]
+  #  command: ["/root/scripts/start_drone_container.sh"]
     
   drone_2:
     build:
@@ -59,8 +56,33 @@ services:
       - SYSID_THISMAV=2
       - ROS_DOMAIN_ID=1
       - DDS_UDP_PORT=2020
+      - MICRO_ROS_AGENT_PORT=2020
     volumes:
       - ./instance_1:/sitl/instance_1
-      - ./config:/config
+      - ./src/swarm_control/parameters:/config
       - ./src/scripts:/root/scripts:ro
     command: ["/root/scripts/start_drone_container.sh"]
+
+  micro-ros-agent-drone1:
+      image: microros/micro-ros-agent:humble
+      container_name: micro_ros_agent_drone1
+      network_mode: host
+      restart: unless-stopped
+      command: udp4 --port 2019 -v6
+      environment:
+        - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+        - ROS_DOMAIN_ID=1
+      depends_on:
+        - drone_1
+
+  micro-ros-agent-drone2:
+    image: microros/micro-ros-agent:humble
+    container_name: micro_ros_agent_drone2
+    network_mode: host
+    restart: unless-stopped
+    command: udp4 --port 2020 -v6
+    environment:
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+     # - ROS_DOMAIN_ID=1
+    depends_on:
+      - drone_2

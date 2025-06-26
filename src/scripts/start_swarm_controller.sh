@@ -1,132 +1,81 @@
 #!/bin/bash
-
-# Swarm Controller Startup Script
-# This script runs inside the swarm_controller container
-
 set -e
 
 echo "=== Swarm Controller Starting ==="
 echo "NUM_DRONES: ${NUM_DRONES:-4}"
 echo "ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-1}"
-echo "RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}"
 
 # Source ROS2 environment
 source /opt/ros/humble/setup.bash
 
-# Build the workspace if needed
-cd /root/ros2_ws
-
-if [ ! -f install/setup.bash ]; then
-    echo "Building ROS2 workspace..."
-    if [ -d src/swarm_control ]; then
-        colcon build --packages-select swarm_control --symlink-install
-        if [ $? -eq 0 ]; then
-            echo "Build successful"
-        else
-            echo "Build failed, but continuing..."
-        fi
-    else
-        echo "Warning: swarm_control package not found in src/"
-    fi
+# Source workspace if it exists
+if [ -f /root/ros2_ws/install/setup.bash ]; then
+    source /root/ros2_ws/install/setup.bash
 fi
 
-# Source the workspace
-if [ -f install/setup.bash ]; then
-    source install/setup.bash
-    echo "ROS2 workspace sourced successfully"
-else
-    echo "Warning: ROS2 workspace not found, using system packages only"
-fi
-
-echo "Starting swarm controller for ${NUM_DRONES:-4} drones..."
-
-# Wait for SITL instances to be ready
-echo "Checking SITL readiness..."
+echo "Waiting for micro_ros_agent instances..."
 for i in $(seq 1 ${NUM_DRONES:-4}); do
-    PORT=$((14550 + (i-1) * 10))
-    TIMEOUT=60
-    COUNTER=0
+    PORT=$((2018 + i))  # 2019, 2020, 2021, 2022
+    echo "Checking micro_ros_agent drone $i on port $PORT..."
 
-    echo "Waiting for drone $i on port $PORT..."
-    while ! nc -z localhost $PORT && [ $COUNTER -lt $TIMEOUT ]; do
-        sleep 2
-        COUNTER=$((COUNTER + 2))
-        if [ $((COUNTER % 20)) -eq 0 ]; then
-            echo "  Still waiting for drone $i... ($COUNTER/$TIMEOUT seconds)"
-        fi
+    timeout=30
+    while ! nc -z localhost $PORT && [ $timeout -gt 0 ]; do
+        sleep 1
+        timeout=$((timeout - 1))
     done
 
-    if [ $COUNTER -ge $TIMEOUT ]; then
-        echo "Warning: Timeout waiting for drone $i on port $PORT"
+    if [ $timeout -eq 0 ]; then
+        echo "❌ micro_ros_agent drone $i not ready"
     else
-        echo "Drone $i ready on port $PORT"
+        echo "✅ micro_ros_agent drone $i ready"
     fi
 done
 
-echo "SITL readiness check completed"
+echo "Waiting for ArduPilot SITL instances..."
+for i in $(seq 1 ${NUM_DRONES:-4}); do
+    PORT=$((14550 + (i-1) * 10))
+    echo "Checking ArduPilot drone $i on port $PORT..."
 
-# Check which launch files are available
-LAUNCH_DIR="/root/ros2_ws/src/swarm_control/launch"
-COMPOSE_LAUNCH="$LAUNCH_DIR/compose_decentralized.launch.py"
-DEFAULT_LAUNCH="$LAUNCH_DIR/decentralized_swarm.launch.py"
-
-if [ -f "$COMPOSE_LAUNCH" ]; then
-    echo "Using Docker Compose optimized launch file"
-    LAUNCH_FILE="swarm_control compose_decentralized.launch.py"
-elif [ -f "$DEFAULT_LAUNCH" ]; then
-    echo "Using standard decentralized launch file"
-    LAUNCH_FILE="swarm_control decentralized_swarm.launch.py"
-else
-    echo "No launch files found. Starting basic monitoring..."
-
-    # Basic monitoring loop
-    while true; do
-        echo "=== ROS2 Topic Monitor $(date) ==="
-        timeout 5 ros2 topic list 2>/dev/null | grep -E "(drone|swarm|mavros|ap/)" || echo "No drone topics found"
-
-        echo "Active nodes:"
-        timeout 5 ros2 node list 2>/dev/null | grep -E "(drone|swarm)" || echo "No drone nodes found"
-
-        echo "Port status:"
-        for i in $(seq 1 ${NUM_DRONES:-4}); do
-            PORT=$((14550 + (i-1) * 10))
-            if nc -z localhost $PORT 2>/dev/null; then
-                echo "  Drone $i: ✓ Port $PORT"
-            else
-                echo "  Drone $i: ✗ Port $PORT"
-            fi
-        done
-
-        echo "---"
-        sleep 30
+    timeout=30
+    while ! nc -z localhost $PORT && [ $timeout -gt 0 ]; do
+        sleep 1
+        timeout=$((timeout - 1))
     done
 
-    exit 0
-fi
+    if [ $timeout -eq 0 ]; then
+        echo "❌ ArduPilot drone $i not ready"
+    else
+        echo "✅ ArduPilot drone $i ready"
+    fi
+done
 
-# Launch the swarm
-echo "Launching: ros2 launch $LAUNCH_FILE num_drones:=${NUM_DRONES:-4}"
+echo "=== System Ready - Starting Monitoring ==="
 
-# Set up error handling
-set +e
-ros2 launch $LAUNCH_FILE num_drones:=${NUM_DRONES:-4}
-LAUNCH_EXIT_CODE=$?
-set -e
+# Simple monitoring loop
+while true; do
+    echo "=== Status Check $(date '+%H:%M:%S') ==="
 
-if [ $LAUNCH_EXIT_CODE -ne 0 ]; then
-    echo "Launch failed with exit code $LAUNCH_EXIT_CODE"
-    echo "Starting fallback monitoring..."
+    # Check ROS topics
+    echo "micro-ROS Topics:"
+    ros2 topic list | grep -E "^/ap" | head -5 || echo "No /ap topics found"
 
-    # Fallback monitoring
-    while true; do
-        echo "=== Fallback Monitor $(date) ==="
-        echo "ROS2 topics:"
-        timeout 5 ros2 topic list 2>/dev/null || echo "Failed to get topics"
+    # Check nodes
+    echo "ROS Nodes:"
+    ros2 node list | grep -E "(drone|agent)" | head -3 || echo "No drone nodes found"
 
-        echo "ROS2 nodes:"
-        timeout 5 ros2 node list 2>/dev/null || echo "Failed to get nodes"
+    # Check connections
+    echo "Connections:"
+    for i in $(seq 1 ${NUM_DRONES:-4}); do
+        AGENT_PORT=$((2018 + i))
+        SITL_PORT=$((14550 + (i-1) * 10))
 
-        echo "---"
-        sleep 60
+        if nc -z localhost $AGENT_PORT 2>/dev/null && nc -z localhost $SITL_PORT 2>/dev/null; then
+            echo "  Drone $i: ✅"
+        else
+            echo "  Drone $i: ❌"
+        fi
     done
-fi
+
+    echo "---"
+    sleep 15
+done

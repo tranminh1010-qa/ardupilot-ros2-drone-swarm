@@ -1,34 +1,6 @@
-# Dockerfile.dds-agent - Micro XRCE-DDS Agent for ArduPilot
-FROM ubuntu:22.04
+FROM microros/micro-ros-agent:humble
 
-ENV DEBIAN_FRONTEND=noninteractive
+# Add any custom configurations if needed
+EXPOSE 2019-2030/udp
 
-# Install dependencies
-RUN apt-get update && apt-get install -y \
-    git \
-    cmake \
-    g++ \
-    wget \
-    libssl-dev \
-    libboost-all-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Build Micro XRCE-DDS Agent
-WORKDIR /tmp
-RUN git clone https://github.com/eProsima/Micro-XRCE-DDS-Agent.git && \
-    cd Micro-XRCE-DDS-Agent && \
-    mkdir build && cd build && \
-    cmake .. && \
-    make -j$(nproc) && \
-    make install && \
-    ldconfig && \
-    cd / && rm -rf /tmp/Micro-XRCE-DDS-Agent
-
-WORKDIR /root
-
-# Default to UDP on port 2019
-# Expose necessary ports
-EXPOSE 2019/udp 5501-5591 5760-5780 14550-14750/udp 9002-9052/udp
-
-# Run the agent
-CMD ["MicroXRCEAgent", "udp4", "-p", "2019", "-v", "6"]
+CMD ["udp4", "--port", "2019", "-v", "6"]
