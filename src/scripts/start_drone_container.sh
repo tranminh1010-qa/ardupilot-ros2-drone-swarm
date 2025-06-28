@@ -19,8 +19,9 @@ GAZEBO_JSON_PORT=$((9002 + 10 * INSTANCE))
 mkdir -p /sitl/instance_${INSTANCE}
 cd /sitl/instance_${INSTANCE}
 
-# UPDATE parameter file to set correct DDS port:
+# UPDATE parameter file to set correct DDS port and sys_mav_id:
 echo "DDS_UDP_PORT=${MICRO_ROS_AGENT_PORT}" > /tmp/instance_dds.parm
+echo "SYSID_THISMAV=${SYSID_THISMAV}" >> /tmp/instance_dds.parm
 cat /config/dds_swarm.parm >> /tmp/instance_dds.parm
 cat /tmp/instance_dds.parm
 
@@ -29,8 +30,9 @@ cat /tmp/instance_dds.parm
 cd -
 sim_vehicle.py \
     --vehicle ArduCopter \
-    --out 127.0.0.0:${MAVPROXY_UDP_PORT} \
-    --out 127.0.0.0:${DDS_UDP_PORT} \
+    --out 127.0.0.1:${MAVPROXY_UDP_PORT} \
+    --out 127.0.0.1:${DDS_UDP_PORT} \
+    --sysid $((INSTANCE+1)) \
     --instance "${INSTANCE}" \
     --add-param-file=/tmp/instance_dds.parm
     #--model=JSON \  #model and frame require gazebo to be running

@@ -7,7 +7,6 @@ SERIAL1_PROTOCOL = 2        # MAVLink2 telemetry (not DDS)
 SERIAL1_BAUD = 57          # 57600 baud for telemetry
 
 # System Identification
-SYSID_THISMAV = 1          # Unique per drone (1-4)
 SYSID_MYGCS = 255          # Ground Control System ID
 
 # Simulation Performance
