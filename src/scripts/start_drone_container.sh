@@ -32,6 +32,7 @@ sim_vehicle.py \
     --vehicle ArduCopter \
     --out 127.0.0.1:${MAVPROXY_UDP_PORT} \
     --out 127.0.0.1:${DDS_UDP_PORT} \
+    --custom-location=40.072842,-105.230575,1586,0 \
     --sysid $((INSTANCE+1)) \
     --instance "${INSTANCE}" \
     --add-param-file=/tmp/instance_dds.parm

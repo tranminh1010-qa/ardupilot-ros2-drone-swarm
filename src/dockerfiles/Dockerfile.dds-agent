@@ -1,5 +1,6 @@
 FROM microros/micro-ros-agent:humble
 
+RUN apt update &* apt install
 # Add any custom configurations if needed
 EXPOSE 2019-2030/udp
 

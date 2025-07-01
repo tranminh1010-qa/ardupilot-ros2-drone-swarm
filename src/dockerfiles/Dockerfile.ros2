@@ -3,10 +3,7 @@ FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
     TZ=UTC \
-    ROS_DISTRO=humble \
-    ROS_DOMAIN_ID=1 \
-    RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-
+    ROS_DISTRO=humble
 # Install basic dependencies
 RUN apt-get update && apt-get install -y \
     curl gnupg lsb-release \
@@ -63,14 +60,13 @@ RUN pip3 install --no-cache-dir \
 # Initialize rosdep
 RUN rosdep init && rosdep update
 
+
 # Create workspace directories
 WORKDIR /root
 RUN mkdir -p /root/ros2_ws/src /root/scripts /root/logs /root/config
 
 # Setup ROS environment
 RUN echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc && \
-    echo "export ROS_DOMAIN_ID=\${ROS_DOMAIN_ID:-1}" >> ~/.bashrc && \
-    echo "export RMW_IMPLEMENTATION=\${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}" >> ~/.bashrc && \
     echo "if [ -f /root/ros2_ws/install/setup.bash ]; then" >> ~/.bashrc && \
     echo "    source /root/ros2_ws/install/setup.bash" >> ~/.bashrc && \
     echo "fi" >> ~/.bashrc

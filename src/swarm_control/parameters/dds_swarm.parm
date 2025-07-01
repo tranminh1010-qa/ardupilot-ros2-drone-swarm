@@ -11,3 +11,4 @@ SYSID_MYGCS = 255          # Ground Control System ID
 
 # Simulation Performance
 SIM_SPEEDUP = 1            # Real-time simulation
+DDS_DOMAIN_ID = 0
