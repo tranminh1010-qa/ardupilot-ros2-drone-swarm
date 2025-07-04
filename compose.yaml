@@ -15,35 +15,20 @@ services:
       context: ./src/dockerfiles
       dockerfile: Dockerfile.ros2
     container_name: swarm_controller
-    network_mode: host
+    # It ensures that signals sent to the Docker container are correctly propagated to the application process running inside
+    init: true
     environment:
-      - RMW_FASTRTPS_USE_QOS_FROM_XML=1
       - NUM_DRONES=${NUM_DRONES:-2}
-      - DISPLAY=${DISPLAY}
       - ROS_DOMAIN_ID=0
-      #RMW Parameters
-      - QT_X11_NO_MITSHM=1
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-     # - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-     # - FASTDDS_DEFAULT_PROFILES_FILE=/config/fastdds_node.xml
-      - RCUTILS_LOGGING_BUFFERED_STREAM=1
-      - RCUTILS_LOGGING_USE_STDOUT=1
-      - RMW_FASTRTPS_BUFFER_SIZE=16777216  # 16MB
+      #- FASTDDS_DEFAULT_PROFILES_FILE=/root/config/fastdds_profile.xml
     volumes:
       - ./src:/root/ros2_ws/src
       - ./logs:/root/logs:delegated
       - ./src/scripts:/root/scripts:ro
       - ./src/dockerfiles/config:/root/config:ro
-      - /tmp/.X11-unix:/tmp/.X11-unix:ro
-      - ${HOME}/.Xauthority:/root/.Xauthority:rw
-    devices:
-      - /dev/dri:/dev/dri
-#    stdin_open: true
-#    tty: true
-#    command: [ "/bin/bash" ]
     command: [ "/root/scripts/start_swarm_controller.sh" ]
 
-  # Drone instances with Serial DDS + UDP MAVLink
   drone_1:
     build:
       context: ./src/dockerfiles

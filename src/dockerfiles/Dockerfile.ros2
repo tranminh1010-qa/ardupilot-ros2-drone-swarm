@@ -71,5 +71,8 @@ RUN echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc && \
     echo "    source /root/ros2_ws/install/setup.bash" >> ~/.bashrc && \
     echo "fi" >> ~/.bashrc
 
+RUN apt-get update && apt-get install -y \
+    tini \
+    && rm -rf /var/lib/apt/lists/*
 # Expose necessary ports
 EXPOSE 2019-2030/udp 5501-5591 5760-5780 14550-14750/udp 9001-9052/udp
