@@ -3,10 +3,10 @@ x-common-settings: &common-settings
   ipc: host
   pid: host
   privileged: true
-  volumes:
-    - /dev/shm:/dev/shm
-    - /dev:/dev
-    - ./config:/config
+#  volumes:
+#    - /dev/shm:/dev/shm
+#    - /dev:/dev
+#    - ./config:/config
 
 services:
   swarm_controller:
@@ -17,14 +17,15 @@ services:
     container_name: swarm_controller
     network_mode: host
     environment:
-      - FASTDDS_DEFAULT_PROFILES_FILE=/config/fastdds_node.xml
       - RMW_FASTRTPS_USE_QOS_FROM_XML=1
-      - NUM_DRONES=${NUM_DRONES:-4}
+      - NUM_DRONES=${NUM_DRONES:-2}
       - DISPLAY=${DISPLAY}
       - ROS_DOMAIN_ID=0
       #RMW Parameters
       - QT_X11_NO_MITSHM=1
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+     # - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+     # - FASTDDS_DEFAULT_PROFILES_FILE=/config/fastdds_node.xml
       - RCUTILS_LOGGING_BUFFERED_STREAM=1
       - RCUTILS_LOGGING_USE_STDOUT=1
       - RMW_FASTRTPS_BUFFER_SIZE=16777216  # 16MB
@@ -37,9 +38,10 @@ services:
       - ${HOME}/.Xauthority:/root/.Xauthority:rw
     devices:
       - /dev/dri:/dev/dri
-    stdin_open: true
-    tty: true
-    command: [ "/bin/bash" ]
+#    stdin_open: true
+#    tty: true
+#    command: [ "/bin/bash" ]
+    command: [ "/root/scripts/start_swarm_controller.sh" ]
 
   # Drone instances with Serial DDS + UDP MAVLink
   drone_1:
@@ -88,7 +90,7 @@ services:
       - MICRO_ROS_AGENT_DISCOVERY_TIMEOUT=10
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
       - ROS_DOMAIN_ID=0
-    command: udp4 --port 2019 -v6 --discovery-time 500 -d 0
+    command: udp4 --port 2019 -v4
     depends_on:
       - drone_1
 
@@ -102,6 +104,6 @@ services:
       - MICRO_ROS_AGENT_DISCOVERY_TIMEOUT=10
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
       - ROS_DOMAIN_ID=0
-    command: udp4 --port 2020 -v6 --discovery-time 500 -d 0
+    command: udp4 --port 2020 -v4
     depends_on:
       - drone_2

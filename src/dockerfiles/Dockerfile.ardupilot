@@ -30,18 +30,20 @@ RUN pip3 install --no-cache-dir -U \
     && pip3 install --no-cache-dir git+https://github.com/dronekit/dronekit-python.git@master
 
 # Clone & install Micro-XRCE-DDS-Gen dependency
-RUN git clone --recurse-submodules https://github.com/ardupilot/Micro-XRCE-DDS-Gen.git /home/${USER_NAME}/Micro-XRCE-DDS-Gen \
-    && cd /home/${USER_NAME}/Micro-XRCE-DDS-Gen \
+RUN git clone --recurse-submodules https://github.com/ardupilot/Micro-XRCE-DDS-Gen.git /root/Micro-XRCE-DDS-Gen \
+    && cd /root/Micro-XRCE-DDS-Gen \
     && ./gradlew assemble \
-    && export AP_ENV_LOC="/home/${USER_NAME}/.ardupilot_env" \
-    && echo "export PATH=\$PATH:$PWD/scripts" >> $AP_ENV_LOC
+    && echo "export PATH=\$PATH:/root/Micro-XRCE-DDS-Gen/scripts" >> /root/.bashrc
+
+# Update PATH to include microxrceddsgen
+ENV PATH="/root/Micro-XRCE-DDS-Gen/scripts:${PATH}"
 
 # Clone and build ArduPilot
 WORKDIR /root
 RUN mkdir -p /root/ardu_ws/src && cd /root/ardu_ws/src \
     && git clone --recurse-submodules https://github.com/ArduPilot/ardupilot.git \
     && cd ardupilot && git submodule update --init --recursive \
-    && ./waf distclean && ./waf configure --board sitl --debug
+    && ./waf distclean && ./waf configure --board sitl --enable-DDS --debug
 
 RUN pip3 install mavproxy
 
