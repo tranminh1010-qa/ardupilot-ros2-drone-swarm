@@ -22,6 +22,7 @@ cd /sitl/instance_${INSTANCE}
 # UPDATE parameter file to set correct DDS port and sys_mav_id:
 echo "DDS_UDP_PORT=${MICRO_ROS_AGENT_PORT}" > /tmp/instance_dds.parm
 echo "SYSID_THISMAV=${SYSID_THISMAV}" >> /tmp/instance_dds.parm
+#echo "DDS_NAMESPACE=drone${INSTANCE}" >> /tmp/instance_dds.parm
 cat /config/dds_swarm.parm >> /tmp/instance_dds.parm
 cat /tmp/instance_dds.parm
 

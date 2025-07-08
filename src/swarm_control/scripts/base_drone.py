@@ -90,8 +90,7 @@ class BaseDrone(Node):
 
         except Exception as e:
             self.get_logger().warn(f"Connection attempt failed for drone {self.drone_id}: {str(e)}")
-            # Add diagnostic info
-            self.log_connection_diagnostics()
+
 
     def check_sitl_container_ready(self):
         """Check if SITL container and port are ready"""
@@ -117,21 +116,6 @@ class BaseDrone(Node):
             self.get_logger().debug(f"Port check error for drone {self.drone_id}: {e}")
             return False
 
-    def log_connection_diagnostics(self):
-        """Log diagnostic information for connection issues"""
-        try:
-            port_str = self.mavlink_connection.split(':')[-1]
-
-            # Check network namespace
-            self.get_logger().info(f"Drone {self.drone_id} diagnostics:")
-            self.get_logger().info(f"  - Target port: {port_str}")
-            self.get_logger().info(f"  - ROS Domain: {self.ros_domain_id}")
-
-            # List listening ports
-            result = os.system(f"netstat -tuln 2>/dev/null | grep ':{port_str} ' | head -1")
-
-        except Exception as e:
-            self.get_logger().debug(f"Diagnostic logging error: {e}")
 
     def post_connection_setup(self):
         """Extended setup for Docker Compose environment"""

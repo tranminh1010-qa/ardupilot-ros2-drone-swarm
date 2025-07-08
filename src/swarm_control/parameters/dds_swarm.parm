@@ -12,3 +12,7 @@ SYSID_MYGCS = 255          # Ground Control System ID
 # Simulation Performance
 SIM_SPEEDUP = 1            # Real-time simulation
 DDS_DOMAIN_ID = 0
+
+# Disable arming check
+ARMING_CHECK = 0
+SIM_RC_FAIL = 0
