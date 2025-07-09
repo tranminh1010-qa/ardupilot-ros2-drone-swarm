@@ -74,7 +74,7 @@ class BaseDrone(Node):
                     self.get_logger().info(f"Attempting MAVLink connection to {self.mavlink_connection}")
                     self.mav_connection = mavutil.mavlink_connection(
                         self.mavlink_connection,
-                        source_system=self.drone_id + 100,  # Unique source system
+                        source_system=self.drone_id,  # Unique source system
                         timeout=self.connection_timeout
                     )
 

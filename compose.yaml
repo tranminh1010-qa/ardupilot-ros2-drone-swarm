@@ -43,18 +43,18 @@ services:
     environment:
       - NUM_DRONES=${NUM_DRONES:-2}
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-      - ROS_DISCOVERY_SERVER=172.20.0.10:11888
+      #- ROS_DISCOVERY_SERVER=172.20.0.10:11888
       - ROS_DOMAIN_ID=0
       #- FASTDDS_DEFAULT_PROFILES_FILE=/root/config/fastdds_profile.xml
     volumes:
-      - ./src:/root/ros2_ws/src
+      - ./src/swarm_control:/ros2_ws/src/swarm_control
       - ./logs:/root/logs:delegated
       - ./src/scripts:/root/scripts:ro
       - ./src/dockerfiles/config:/root/config:ro
     stdin_open: true
     tty: true
     command: [ "/bin/bash" ]
-   # command: [ "/root/scripts/start_swarm_controller.sh" ]
+#    command: [ "/root/scripts/start_swarm_controller.sh" ]
 #    networks:
 #      - swarm_network
     depends_on:
@@ -74,7 +74,6 @@ services:
       - MICRO_ROS_AGENT_PORT=2019
  #     - ROS_DISCOVERY_SERVER=172.20.0.10:11888
     volumes:
-      - ./instance_0:/sitl/instance_0
       - ./src/swarm_control/parameters:/config
       - ./src/scripts:/root/scripts:ro
 #    networks:
@@ -97,14 +96,15 @@ services:
 #    networks:
 #      - swarm_network
     volumes:
-      - ./instance_1:/sitl/instance_1
       - ./src/swarm_control/parameters:/config
       - ./src/scripts:/root/scripts:ro
     command: ["/root/scripts/start_drone_container.sh"]
 
   micro-ros-agent-drone1:
     <<: *common-settings
-    image: microros/micro-ros-agent:humble
+    build:
+      context: ./src/dockerfiles
+      dockerfile: Dockerfile.dds-agent
     container_name: micro_ros_agent_drone1
     network_mode: host
     restart: unless-stopped
@@ -113,31 +113,26 @@ services:
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
       - ROS_DOMAIN_ID=0
       - ROS_NAMESPACE=drone1
-    #  - ROS_DISCOVERY_SERVER=172.20.0.10:11888
-    command: udp4 --port 2019 -v4
-#    networks:
-#      - swarm_network
+    command: ["udp4", "--port", "2019", "-v4"]
     depends_on:
       - drone_1
 
   micro-ros-agent-drone2:
-    <<: *common-settings
-    image: microros/micro-ros-agent:humble
-    container_name: micro_ros_agent_drone2
-    network_mode: host
-    restart: unless-stopped
-    environment:
-      - MICRO_ROS_AGENT_DISCOVERY_TIMEOUT=10
-      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-      - ROS_DOMAIN_ID=0
-      - ROS_NAMESPACE=drone2
-  #    - ROS_DISCOVERY_SERVER=172.20.0.10:11888
-    command: udp4 --port 2020 -v4
-#    networks:
-#      - swarm_network
-    depends_on:
-      - drone_2
-
+      <<: *common-settings
+      build:
+        context: ./src/dockerfiles
+        dockerfile: Dockerfile.dds-agent
+      container_name: micro_ros_agent_drone2
+      network_mode: host
+      restart: unless-stopped
+      environment:
+        - MICRO_ROS_AGENT_DISCOVERY_TIMEOUT=10
+        - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+        - ROS_DOMAIN_ID=0
+        - ROS_NAMESPACE=drone2
+      command: ["udp4", "--port", "2020", "-v4"]
+      depends_on:
+        - drone_2
 networks:
   swarm_network:
     driver: bridge

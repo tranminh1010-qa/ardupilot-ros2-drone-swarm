@@ -1,7 +1,39 @@
 FROM microros/micro-ros-agent:humble
 
-RUN apt update &* apt install
-# Add any custom configurations if needed
+# Install build dependencies including compilers and make
+RUN apt-get update && apt-get install -y \
+    git \
+    build-essential \
+    cmake \
+    make \
+    gcc \
+    g++ \
+    python3-colcon-common-extensions \
+    ros-humble-ament-cmake \
+    ros-humble-rosidl-default-generators \
+    ros-humble-rosidl-default-runtime \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create workspace and add ardupilot_msgs
+WORKDIR /uros_ws
+RUN mkdir src && \
+    cd src && \
+    git clone https://github.com/ArduPilot/ardupilot.git --depth=1 && \
+    cp -r ardupilot/Tools/ros2/ardupilot_msgs . && \
+    rm -rf ardupilot
+
+# Build ardupilot_msgs
+RUN . /opt/ros/humble/setup.sh && \
+    colcon build --packages-select ardupilot_msgs
+
+# Create a startup script that sources the environment
+RUN echo '#!/bin/bash\n\
+source /opt/ros/humble/setup.bash\n\
+source /uros_ws/install/setup.bash\n\
+exec ros2 run micro_ros_agent micro_ros_agent "$@"' > /start_agent.sh && \
+    chmod +x /start_agent.sh
+
 EXPOSE 2019-2030/udp
 
-CMD ["udp4", "--port", "2019", "-v", "6"]
+ENTRYPOINT ["/start_agent.sh"]
+CMD ["udp4", "--port", "2019", "-v", "4"]

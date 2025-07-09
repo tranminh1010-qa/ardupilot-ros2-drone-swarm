@@ -7,14 +7,9 @@ echo "ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-1}"
 # Source ROS2 environment
 source /opt/ros/humble/setup.bash
 
-# Source workspace if it exists
-if [ -f /root/ros2_ws/install/setup.bash ]; then
-    source /root/ros2_ws/install/setup.bash
-else
-  cd /root/ros2_ws
-  colcon build --symlink-install
-  source /root/ros2_ws/install/setup.bash
-fi
+cd /ros2_ws
+colcon build --symlink-install --packages-select=swarm_control
+source /ros2_ws/install/setup.bash
 
 ros2 launch swarm_control compose_decentralized.launch.py
 

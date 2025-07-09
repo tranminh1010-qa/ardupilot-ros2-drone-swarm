@@ -46,7 +46,7 @@ def generate_launch_description():
                 # Create drone node - connects to existing SITL instance
                 drone_node = Node(
                     package='swarm_control',
-                    executable='base_drone.py',
+                    executable='base_drone_dds.py',
                     name=f'drone{drone_id}',
                     output='screen',
                     parameters=[{
