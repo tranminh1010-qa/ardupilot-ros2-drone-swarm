@@ -1,18 +1,17 @@
 #!/usr/bin/env python3
 
+import enum
 import numpy as np
+import os
 import rclpy
-from rclpy.node import Node
-from geometry_msgs.msg import PoseStamped
+import time
 from ardupilot_msgs.msg import Status  # Use DDS messages
 from ardupilot_msgs.srv import ArmMotors, ModeSwitch
-import time
-import enum
-import os
-from noise_injector import NoiseInjector
-from points_distributor import generate_circular_waypoints
+from geometry_msgs.msg import PoseStamped
+from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 
+from points_distributor import generate_circular_waypoints
 
 
 class DroneState(enum.Enum):

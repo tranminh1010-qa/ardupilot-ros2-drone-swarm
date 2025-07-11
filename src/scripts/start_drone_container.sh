@@ -26,8 +26,7 @@ echo "SYSID_THISMAV=${SYSID_THISMAV}" >> /tmp/instance_dds.parm
 cat /config/dds_swarm.parm >> /tmp/instance_dds.parm
 cat /tmp/instance_dds.parm
 
-# Start ArduPilot SITL with Gazebo and DDS
-
+# Start ArduPilot SITL
 cd -
 sim_vehicle.py \
     --vehicle ArduCopter \

@@ -23,7 +23,7 @@ def generate_launch_description():
             num_drones = int(context.launch_configurations['num_drones'])
 
             # Docker Compose environment - SITL instances are already running
-            ros_domain_id = '0'
+            ros_domain_id = 0
             base_mavlink_port = 14550
             base_ros_port = 14551
 
