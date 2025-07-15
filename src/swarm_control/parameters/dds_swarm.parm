@@ -6,67 +6,99 @@ SERIAL0_PROTOCOL = 2        # MAVLink2 for QGroundControl
 SERIAL1_PROTOCOL = 2        # MAVLink2 telemetry (not DDS)
 SERIAL1_BAUD = 57          # 57600 baud for telemetry
 
+# SITL Parameters
+FS_THR_ENABLE 0
+FS_GCS_ENABLE 0
+ARMING_CHECK 1
+RC_OPTIONS = 0       # Clear bit 5 to disable throttle arming check
+############### Default parameters from copter.parm#################
 # System Identification
-SYSID_MYGCS = 255          # Ground Control System ID
-
-# Disable arming check
-SIM_RC_FAIL = 0
-
-# Arming and safety
-ARMING_CHECK 0  # Disable all pre-arm checks for debugging
-BRD_SAFETY_DEFLT 0
-
-# Set RC failsafe to enable GUIDED mode
-FS_THR_ENABLE 1
-FS_THR_VALUE 910
-FS_OPTIONS 1
-
-# AHRS and EKF configuration
-EK2_ENABLE 1
-AHRS_EKF_TYPE 2
-AHRS_GPS_USE 1
-AHRS_GPS_MINSATS 6
-EK3_ENABLE 0
-EK2_IMU_MASK 3
-EK2_CHECK_SCALE 200
-EK2_GPS_TYPE 1
-EK2_ALT_SOURCE 1
-EK2_ACC_P_NSE 0.3
-EK2_GYRO_P_NSE 0.02
-EK2_ALT_M_NSE 1.0
-EK2_MAG_CAL 4
-EK2_MAG_P_NSE 0.003
-
-# EKF parameters for more permissive position estimate
-EK2_GPS_CHECK 3
-EK2_POS_I_GATE 1000
-EK2_GLITCH_RAD 100
-
-# GPS Configuration
-GPS_AUTO_CONFIG 1
-GPS_AUTO_SWITCH 1
-
-# Barometer Configuration
-BARO1_GND_PRESS 101325
-BARO_ALT_OFFSET 0
-
-# SITL-specific parameters
-SIM_GPS_DISABLE 0
-PILOT_THR_FILT 0
-INS_GYR_CAL 1
-
-# Additional parameters
-SCHED_LOOP_RATE 300
-
-# SITL-specific GPS parameters
-SIM_GPS_TYPE 1
-SIM_GPS_LOCKTIME 0
-SIM_GPS_ALT_OFS 0
-
-# Enable compass (magnetometer) for better orientation estimates
-COMPASS_ENABLE 1
-DISARM_DELAY 0
-
-SYSID_ENFORCE=0        # Disable strict system ID enforcement
-SIM_SPEEDUP=1          # Ensure simulation speed is at 1x
-SIM_RATE_HZ=1000       # Higher update rate for better synchronization
+FRAME_TYPE	0
+ARSPD_PIN 1
+ARSPD_BUS 2
+ATC_RAT_YAW_P 0.3
+ATC_RAT_YAW_I 0.02
+BATT_MONITOR    4
+COMPASS_OFS_X   5
+COMPASS_OFS_Y   13
+COMPASS_OFS_Z   -18
+COMPASS_OFS2_X   5
+COMPASS_OFS2_Y   13
+COMPASS_OFS2_Z   -18
+COMPASS_OFS3_X   5
+COMPASS_OFS3_Y   13
+COMPASS_OFS3_Z   -18
+FENCE_RADIUS    150
+FRAME_CLASS     1
+RC1_MAX         2000.000000
+RC1_MIN         1000.000000
+RC1_TRIM        1500.000000
+RC2_MAX         2000.000000
+RC2_MIN         1000.000000
+RC2_TRIM        1500.000000
+RC3_MAX         2000.000000
+RC3_MIN         1000.000000
+RC3_TRIM        1500.000000
+RC4_MAX         2000.000000
+RC4_MIN         1000.000000
+RC4_TRIM        1500.000000
+RC5_MAX         2000.000000
+RC5_MIN         1000.000000
+RC5_TRIM        1500.000000
+RC6_MAX         2000.000000
+RC6_MIN         1000.000000
+RC6_TRIM        1500.000000
+RC7_MAX         2000.000000
+RC7_MIN         1000.000000
+RC7_OPTION      7
+RC7_TRIM        1500.000000
+RC8_MAX         2000.000000
+RC8_MIN         1000.000000
+RC8_TRIM        1500.000000
+FLTMODE1        7
+FLTMODE2        9
+FLTMODE3        6
+FLTMODE4        3
+FLTMODE5        5
+FLTMODE6		0
+SIM_BARO_RND    0
+# we need small INS_ACC offsets so INS is recognised as being calibrated
+INS_ACCOFFS_X   0.001
+INS_ACCOFFS_Y   0.001
+INS_ACCOFFS_Z   0.001
+INS_ACCSCAL_X   1.001
+INS_ACCSCAL_Y   1.001
+INS_ACCSCAL_Z   1.001
+INS_ACC2OFFS_X   0.001
+INS_ACC2OFFS_Y   0.001
+INS_ACC2OFFS_Z   0.001
+INS_ACC2SCAL_X   1.001
+INS_ACC2SCAL_Y   1.001
+INS_ACC2SCAL_Z   1.001
+INS_ACC3OFFS_X   0.000
+INS_ACC3OFFS_Y   0.000
+INS_ACC3OFFS_Z   0.000
+INS_ACC3SCAL_X   1.000
+INS_ACC3SCAL_Y   1.000
+INS_ACC3SCAL_Z   1.000
+MOT_THST_EXPO   0.65
+MOT_THST_HOVER  0.39
+MOT_BAT_VOLT_MIN 9.6
+MOT_BAT_VOLT_MAX 12.8
+# flightmodes
+# switch 1 Circle
+# switch 2 LAND
+# switch 3 RTL
+# switch 4 Auto
+# switch 5 Loiter
+# switch 6 Stab
+# STABILIZE 	0 !
+# ACRO 			1
+# ALT_HOLD 		2
+# AUTO 			3 !
+# GUIDED 		4
+# LOITER 		5 !
+# RTL 			6 !
+# CIRCLE 		7 !
+# POSITION 		8
+# LAND 			9 !

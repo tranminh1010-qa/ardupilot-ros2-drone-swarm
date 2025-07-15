@@ -466,11 +466,7 @@ class BaseDrone(Node):
         """Enhanced position command for Docker"""
         try:
             # Apply noise only to first drone for testing
-            if self.drone_id == 1:
-                noisy_pos = self.apply_noise_to_position(x, y, z)
-            else:
-                noisy_pos = (x, y, z)
-
+            noisy_pos = self.apply_noise_to_position(x, y, z)
             self.mav_connection.mav.set_position_target_local_ned_send(
                 0, self.mav_connection.target_system, self.mav_connection.target_component,
                 mavutil.mavlink.MAV_FRAME_LOCAL_NED, 0b0000111111111000,

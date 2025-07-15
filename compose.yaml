@@ -45,7 +45,6 @@ services:
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
       #- ROS_DISCOVERY_SERVER=172.20.0.10:11888
       - ROS_DOMAIN_ID=0
-      #- FASTDDS_DEFAULT_PROFILES_FILE=/root/config/fastdds_profile.xml
     volumes:
       - ./src/swarm_control:/ros2_ws/src/swarm_control
       - ./logs:/root/logs:delegated
@@ -55,8 +54,6 @@ services:
 #    tty: true
 #    command: [ "/bin/bash" ]
     command: [ "/root/scripts/start_swarm_controller.sh" ]
-#    networks:
-#      - swarm_network
     depends_on:
       - discovery_server
 
@@ -76,9 +73,9 @@ services:
     volumes:
       - ./src/swarm_control/parameters:/config
       - ./src/scripts:/root/scripts:ro
-#    networks:
-#      - swarm_network
     command: ["/root/scripts/start_drone_container.sh"]
+    depends_on:
+      - micro-ros-agent-drone1
 
   drone_2:
     build:
@@ -93,12 +90,12 @@ services:
       - DDS_UDP_PORT=2020
       - MICRO_ROS_AGENT_PORT=2020
    #   - ROS_DISCOVERY_SERVER=172.20.0.10:11888
-#    networks:
-#      - swarm_network
     volumes:
       - ./src/swarm_control/parameters:/config
       - ./src/scripts:/root/scripts:ro
     command: ["/root/scripts/start_drone_container.sh"]
+    depends_on:
+      - micro-ros-agent-drone2
 
   micro-ros-agent-drone1:
     <<: *common-settings
@@ -112,10 +109,7 @@ services:
       - MICRO_ROS_AGENT_DISCOVERY_TIMEOUT=10
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
       - ROS_DOMAIN_ID=0
-      - ROS_NAMESPACE=drone1
     command: ["udp4", "--port", "2019", "-v4"]
-    depends_on:
-      - drone_1
 
   micro-ros-agent-drone2:
       <<: *common-settings
@@ -131,11 +125,3 @@ services:
         - ROS_DOMAIN_ID=0
         - ROS_NAMESPACE=drone2
       command: ["udp4", "--port", "2020", "-v4"]
-      depends_on:
-        - drone_2
-networks:
-  swarm_network:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16

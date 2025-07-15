@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-
+import json
 import os
 from launch import LaunchDescription
 from launch.actions import ExecuteProcess, TimerAction, LogInfo, DeclareLaunchArgument, OpaqueFunction
@@ -8,7 +8,7 @@ from launch_ros.actions import Node
 from launch.event_handlers import OnProcessExit
 from launch.actions import RegisterEventHandler
 
-from scripts.points_distributor import generate_grid_waypoints, split_by_sector
+from scripts.points_distributor import generate_grid_waypoints, split_by_sector, split_by_grid
 
 
 def generate_launch_description():
@@ -18,12 +18,19 @@ def generate_launch_description():
         description='Number of drones to launch'
     )
 
+    rmw_arg = DeclareLaunchArgument(
+        'rmw_implementation',
+        default_value='rmw_fastrtps_cpp',
+        description='ROS MiddleWare Implementation'
+    )
+
+    # Docker Compose environment - SITL instances are already running
     def launch_setup(context, *args, **kwargs):
         try:
             num_drones = int(context.launch_configurations['num_drones'])
-
-            # Docker Compose environment - SITL instances are already running
-            ros_domain_id = 0
+            LogInfo(msg = f"Launching ROS2 Node for num_drones:{num_drones}")
+            ros_domain_id = '0'
+            rmw_implementation = str(context.launch_configurations.get('rmw_implementation','rmw_fastrtps_cpp'))
             base_mavlink_port = 14550
             base_ros_port = 14551
 
@@ -35,15 +42,15 @@ def generate_launch_description():
             chunks = split_by_sector(wps, num_drones)
             # Create ROS nodes for each drone
             drone_nodes = []
-
             for i in range(num_drones):
                 drone_id = i + 1
                 instance = i
                 mavlink_port = base_mavlink_port + (i * 10)
                 ros_port = base_ros_port + (i * 10)
                 wp = chunks[i] if i < len(chunks) else wps[:4]  # Fallback waypoints
-
+                wp_json = json.dumps(wp)
                 # Create drone node - connects to existing SITL instance
+
                 drone_node = Node(
                     package='swarm_control',
                     executable='base_drone_dds.py',
@@ -52,21 +59,21 @@ def generate_launch_description():
                     parameters=[{
                         'drone_id': drone_id,
                         'mavlink_connection': f'udp:localhost:{ros_port}',
-                        'assigned_waypoints': str(wp),
+                        'assigned_waypoints': wp_json,
                         'instance': instance,
                         'mavlink_port': mavlink_port,
                         'ros_port': ros_port,
                     }],
                     additional_env={
                         'ROS_DOMAIN_ID': ros_domain_id,
-                        'RMW_IMPLEMENTATION': 'rmw_fastrtps_cpp'
+                        'RMW_IMPLEMENTATION': rmw_implementation
                     }
                 )
 
                 drone_nodes.append(drone_node)
 
             for i, drone_node in enumerate(drone_nodes):
-                startup_delay = (i * 5.0)  # After SITL check + stagger
+                startup_delay = (i * 5.0)
                 action_list.append(
                     TimerAction(
                         period=startup_delay,
@@ -83,6 +90,6 @@ def generate_launch_description():
             print(f"Error in launch setup: {str(e)}")
             return [LogInfo(msg=f"Error in launch setup: {str(e)}")]
 
-    launch_actions = [num_drones_arg, OpaqueFunction(function=launch_setup)]
+    launch_actions = [num_drones_arg, rmw_arg,  OpaqueFunction(function=launch_setup)]
 
     return LaunchDescription(launch_actions)

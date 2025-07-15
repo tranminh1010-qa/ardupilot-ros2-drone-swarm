@@ -128,38 +128,24 @@ def split_by_proximity(waypoints, num_drones):
 def split_by_sector(waypoints, num_drones):
     """
     Split waypoints by dividing the area into angular sectors from the center.
-    Good for circular or radial patterns.
     """
     if num_drones >= len(waypoints):
         return [[wp] for wp in waypoints[:num_drones]]
 
-    # Find the center of all waypoints
+    # Find center and calculate angles
     points = np.array([(wp[0], wp[1]) for wp in waypoints])
-    center_x = np.mean(points[:, 0])
-    center_y = np.mean(points[:, 1])
+    center_x, center_y = np.mean(points, axis=0)
 
-    # Calculate angle of each waypoint from center
-    angles = []
-    for wp in waypoints:
-        dx = wp[0] - center_x
-        dy = wp[1] - center_y
-        angle = np.arctan2(dy, dx) % (2 * np.pi)  # Convert to [0, 2π)
-        angles.append(angle)
+    angles = [np.arctan2(wp[1] - center_y, wp[0] - center_x) % (2 * np.pi)
+              for wp in waypoints]
 
     # Sort waypoints by angle
-    waypoints_with_angles = list(zip(waypoints, angles))
-    waypoints_with_angles.sort(key=lambda x: x[1])
+    sorted_wps = [wp for _, wp in sorted(zip(angles, waypoints))]
 
-    # Divide into sectors
+    # Distribute waypoints evenly across drones
     drone_waypoints = [[] for _ in range(num_drones)]
-    for i, (wp, _) in enumerate(waypoints_with_angles):
-        drone_idx = i * num_drones // len(waypoints)
-        drone_waypoints[drone_idx].append(wp)
-
-    # Sort each drone's waypoints for efficient paths
-    for i in range(num_drones):
-        if drone_waypoints[i]:
-            drone_waypoints[i] = sort_waypoints_by_path(drone_waypoints[i])
+    for i, wp in enumerate(sorted_wps):
+        drone_waypoints[i % num_drones].append(wp)
 
     return drone_waypoints
 
