@@ -41,7 +41,7 @@ services:
     init: true
     network_mode: host
     environment:
-      - NUM_DRONES=${NUM_DRONES:-2}
+      - NUM_DRONES=1
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
       #- ROS_DISCOVERY_SERVER=172.20.0.10:11888
       - ROS_DOMAIN_ID=0
@@ -50,10 +50,10 @@ services:
       - ./logs:/root/logs:delegated
       - ./src/scripts:/root/scripts:ro
       - ./src/dockerfiles/config:/root/config:ro
-#    stdin_open: true
-#    tty: true
-#    command: [ "/bin/bash" ]
-    command: [ "/root/scripts/start_swarm_controller.sh" ]
+    stdin_open: true
+    tty: true
+    command: [ "/bin/bash" ]
+    #command: [ "/root/scripts/start_swarm_controller.sh" ]
     depends_on:
       - discovery_server
 

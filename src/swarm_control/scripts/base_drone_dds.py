@@ -3,15 +3,12 @@
 import enum
 import json
 
-import numpy as np
-import os
 import rclpy
 import time
 from ardupilot_msgs.msg import Status, GlobalPosition  # Use DDS messages
 from ardupilot_msgs.srv import ArmMotors, ModeSwitch, Takeoff
-from ardupilot_msgs.srv import Takeoff
-from geographic_msgs.msg import GeoPoseStamped
 from geometry_msgs.msg import PoseStamped
+from geographic_msgs.msg import GeoPoseStamped
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 
@@ -71,7 +68,7 @@ class BaseDrone(Node):
         self.mode_client = self.create_client(ModeSwitch, self._mode_topic)
         while not self.mode_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('mode switch service not available, waiting again...')
-        self.takeoff_client = self.create_client(Takeoff, '/ap/takeoff')
+        self.takeoff_client = self.create_client(Takeoff, '/ap/experimental/takeoff')
         while not self.takeoff_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('Takeoff service not available, waiting...')
 
@@ -83,12 +80,13 @@ class BaseDrone(Node):
         )
 
         # DDS subscribers and service clients
-        self._global_pos_pub = self.create_publisher(PoseStamped, self._global_pos_topic, 1)
+        self._global_pos_pub = self.create_publisher(GlobalPosition, self._global_pos_topic, 1)
         self.status_subscription = self.create_subscription(Status, '/ap/status', self.status_callback, ardupilot_qos)
-        self._subscription_pose = self.create_subscription(PoseStamped, self._pose_topic, self.pose_callback, ardupilot_qos)
+        self.subscription_pose = self.create_subscription(PoseStamped, self._pose_topic, self.pose_callback, ardupilot_qos)
 
         self.get_logger().info(f"QoS: {self.status_subscription.qos_profile}")
         self.get_logger().info(f"Subscribed to: {self.status_subscription.topic_name}")
+        self.get_logger().info(f"Subscribed to: {self.subscription_pose.topic_name}")
 
     def arm_with_timeout(self, timeout: rclpy.duration.Duration):
         """Try to arm. Returns true on success, or false if arming fails or times out."""
@@ -118,10 +116,28 @@ class BaseDrone(Node):
 
         return is_in_desired_mode
 
+    def wait_for_position_estimate(self, timeout: rclpy.duration.Duration):
+        """Wait for EKF to have a good position estimate before switching to GUIDED mode."""
+        start = self.get_clock().now()
+
+        while self.get_clock().now() - start < timeout:
+            # Process callbacks to allow pose_callback to execute
+            rclpy.spin_once(self)
+            # Check if we have a valid position from the pose callback
+            if self.current_position is not None:
+                self.get_logger().info("Position estimate available, ready for GUIDED mode")
+                return True
+
+            self.get_logger().info("Waiting for position estimate...")
+            time.sleep(2)  # Check every 2 seconds
+
+        self.get_logger().error("Timeout waiting for position estimate")
+        return False
+
     def status_callback(self, msg):
         """Handle ArduPilot status messages"""
         self.armed = msg.armed
-        self.get_logger().info(f"EKF flags: {msg.ekf_flags}")
+        self.get_logger().info(f"Status callback: {msg}")
         if self.state == DroneState.CONNECTING:
             self.state = DroneState.CONNECTED
             self.get_logger().info(f"DDS connection established for drone {self.drone_id}")
@@ -160,7 +176,7 @@ class BaseDrone(Node):
 
     def takeoff(self, altitude=10.0):
         req = Takeoff.Request()
-        req.altitude = altitude
+        req.alt = altitude
         future = self.takeoff_client.call_async(req)
         rclpy.spin_until_future_complete(self, future)
         return future.result()
@@ -176,22 +192,20 @@ class BaseDrone(Node):
             self.get_logger().info(f"Drone {self.drone_id} heading to waypoint {i + 1}: {wp}")
             time.sleep(10)  # Wait between waypoints
 
-    def send_position_command_dds(self, x, y, z):
-        """Send position command via DDS"""
-        msg = PoseStamped()
+    def send_position_command_dds(self, lat, lon, alt):
+        msg = GlobalPosition()
         msg.header.stamp = self.get_clock().now().to_msg()
+        msg.type_mask = 0
         msg.header.frame_id = "map"
-        msg.pose.position.x = float(x)
-        msg.pose.position.y = float(y)
-        msg.pose.position.z = float(z)
+        msg.coordinate_frame = 5  # FRAME_GLOBAL_INT
+        msg.latitude = float(lat)
+        msg.longitude = float(lon)
+        msg.altitude = float(alt)
 
         self._global_pos_pub.publish(msg)
 
     def handle_waypoints(self):
         assigned_waypoints_param = self.get_parameter('assigned_waypoints').get_parameter_value().string_value
-        self.get_logger().info(
-            f"Assigned waypoints for drone {self.drone_id}: {assigned_waypoints_param}"
-        )
         if not assigned_waypoints_param or assigned_waypoints_param == '':
             self.waypoints = generate_circular_waypoints()
             self.get_logger().info(f"Generated default circular waypoints for drone {self.drone_id}")
@@ -214,12 +228,16 @@ def main(args=None):
     if not node.arm_with_timeout(rclpy.duration.Duration(seconds=30)):
         raise RuntimeError("Unable to arm")
 
+    # Wait for a position estimate before switching to GUIDED
+    if not node.wait_for_position_estimate(rclpy.duration.Duration(seconds=20)):
+            raise RuntimeError("No position estimate available")
+
     if not node.switch_mode_with_timeout(DroneState.GUIDED, rclpy.duration.Duration(seconds=10)):
         raise RuntimeError("Unable to switch to GUIDED mode")
 
         # Takeoff
     takeoff_result = node.takeoff(10.0)
-    if not takeoff_result.success:
+    if not takeoff_result.status:
         raise RuntimeError("Takeoff failed")
     # Wait for takeoff completion
     time.sleep(15)

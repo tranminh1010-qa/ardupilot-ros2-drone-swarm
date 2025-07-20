@@ -9,8 +9,10 @@ SERIAL1_BAUD = 57          # 57600 baud for telemetry
 # SITL Parameters
 FS_THR_ENABLE 0
 FS_GCS_ENABLE 0
-ARMING_CHECK 1
-RC_OPTIONS = 0       # Clear bit 5 to disable throttle arming check
+ARMING_CHECK 65470 # not include bit 6 (RC check).
+RC_OPTIONS  0       # Clear bit 5 to disable throttle arming check
+BATT_LOW_VOLT 0
+BATT_LOW_MAH 0
 ############### Default parameters from copter.parm#################
 # System Identification
 FRAME_TYPE	0
