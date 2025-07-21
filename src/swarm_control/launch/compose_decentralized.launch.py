@@ -37,7 +37,7 @@ def generate_launch_description():
             action_list = []
 
             # Generate waypoints and distribute to drones
-            wps = generate_grid_waypoints(field_size=80.0, num_points=12, height=30.0)
+            wps = generate_grid_waypoints(field_size=80.0, grid_points=2, height=30.0)
             action_list.append(LogInfo(msg=f"Generated {len(wps)} waypoints for {num_drones} drones."))
             chunks = split_by_sector(wps, num_drones)
             # Create ROS nodes for each drone

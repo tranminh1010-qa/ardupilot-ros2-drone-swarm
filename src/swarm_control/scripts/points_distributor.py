@@ -14,13 +14,13 @@ def generate_circular_waypoints():
         wps.append((x, y, height))
     return wps
 
-def generate_grid_waypoints(field_size=60.0, num_points=6, height=8.0):
+def generate_grid_waypoints(field_size=60.0, grid_points=6, height=8.0):
     """Generate a grid of waypoints"""
     all_waypoints = []
-    spacing = field_size / (num_points - 1)
+    spacing = field_size / (grid_points - 1)
 
-    for i in range(num_points):
-        for j in range(num_points):
+    for i in range(grid_points):
+        for j in range(grid_points):
             x = (i * spacing) - (field_size / 2)
             y = (j * spacing) - (field_size / 2)
             all_waypoints.append((float(x), float(y), height))
@@ -265,7 +265,7 @@ def plot_waypoints(waypoints_list, title):
 # Run the visualization to compare different splitting methods
 if __name__ == "__main__":
     num_drones = 3
-    waypoints = generate_grid_waypoints(field_size=60.0, num_points=6, height=8.0)
+    waypoints = generate_grid_waypoints(field_size=60.0, grid_points=6, height=8.0)
 
     # Visualize different splitting methods
     proximity_split = split_by_proximity(waypoints, num_drones)

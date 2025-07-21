@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import enum
 import json
 
 import rclpy
@@ -8,53 +7,24 @@ import time
 from ardupilot_msgs.msg import Status, GlobalPosition  # Use DDS messages
 from ardupilot_msgs.srv import ArmMotors, ModeSwitch, Takeoff
 from geometry_msgs.msg import PoseStamped
-from geographic_msgs.msg import GeoPoseStamped
+from geographic_msgs.msg import GeoPoseStamped, GeoPointStamped
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
+from pyproj import Transformer
 
 from points_distributor import generate_circular_waypoints
-
-
-class DroneState(enum.Enum):
-    INITIALIZING = 0
-    CONNECTING = 1
-    CONNECTED = 2
-    ARMING = 3
-    GUIDED = 4
-    TAKING_OFF = 5
-    FLYING = 6
-    LANDING = 7
-    ERROR = 8
+from scripts.drone_state import DroneState, FlightMode
 
 
 class BaseDrone(Node):
     def __init__(self, node_name):
         super().__init__(node_name)
 
-        # Declare all parameters first
-        self.waypoints = []
-        self.declare_parameter('drone_id', 1)
-        self.declare_parameter('assigned_waypoints', '')
-        self.declare_parameter("arm_topic", "/ap/arm_motors")
-        self.declare_parameter("mode_topic", "/ap/mode_switch")
-        self.declare_parameter("pose_topic", "/ap/pose/filtered")
-        self.declare_parameter("global_position_topic", "/ap/cmd_gps_pose")
-
-        # Then get parameter values
-        self.drone_id = self.get_parameter('drone_id').get_parameter_value().integer_value
-        self._arm_topic = self.get_parameter("arm_topic").get_parameter_value().string_value
-        self._mode_topic = self.get_parameter("mode_topic").get_parameter_value().string_value
-        self._global_pos_topic = self.get_parameter("global_position_topic").get_parameter_value().string_value
-        self._pose_topic = self.get_parameter("pose_topic").get_parameter_value().string_value
-
-        # Handle Initial Values
+        # Initialize home position variables
+        self.initialize_vars()
+        self.get_parameter_values()
         self.handle_waypoints()
-
         self.state = DroneState.INITIALIZING
-        self._cur_geopose = GeoPoseStamped()
-        self.current_position = None
-        self.target_position = None
-        self.armed = False
 
         self.get_logger().info(f"Initializing drone {self.drone_id} with DDS interface")
 
@@ -83,10 +53,41 @@ class BaseDrone(Node):
         self._global_pos_pub = self.create_publisher(GlobalPosition, self._global_pos_topic, 1)
         self.status_subscription = self.create_subscription(Status, '/ap/status', self.status_callback, ardupilot_qos)
         self.subscription_pose = self.create_subscription(PoseStamped, self._pose_topic, self.pose_callback, ardupilot_qos)
+        self.gps_origin_subscription = self.create_subscription(
+            GeoPointStamped,
+            '/ap/gps_global_origin/filtered',
+            self.gps_origin_callback,
+            ardupilot_qos
+        )
 
         self.get_logger().info(f"QoS: {self.status_subscription.qos_profile}")
         self.get_logger().info(f"Subscribed to: {self.status_subscription.topic_name}")
         self.get_logger().info(f"Subscribed to: {self.subscription_pose.topic_name}")
+
+    def initialize_vars(self):
+        self.waypoints = []
+        self.home_lat = None
+        self.home_lon = None
+        self.home_alt = None
+        self.transformer = None
+        self.current_position = None
+        self.target_position = None
+        self.armed = False
+
+    def get_parameter_values(self):
+        # Declare all parameters first
+        self.declare_parameter('drone_id', 1)
+        self.declare_parameter('assigned_waypoints', '')
+        self.declare_parameter("arm_topic", "/ap/arm_motors")
+        self.declare_parameter("mode_topic", "/ap/mode_switch")
+        self.declare_parameter("pose_topic", "/ap/pose/filtered")
+        self.declare_parameter("global_position_topic", "/ap/cmd_gps_pose")
+        # Then get parameter values
+        self.drone_id = self.get_parameter('drone_id').get_parameter_value().integer_value
+        self._arm_topic = self.get_parameter("arm_topic").get_parameter_value().string_value
+        self._mode_topic = self.get_parameter("mode_topic").get_parameter_value().string_value
+        self._global_pos_topic = self.get_parameter("global_position_topic").get_parameter_value().string_value
+        self._pose_topic = self.get_parameter("pose_topic").get_parameter_value().string_value
 
     def arm_with_timeout(self, timeout: rclpy.duration.Duration):
         """Try to arm. Returns true on success, or false if arming fails or times out."""
@@ -104,14 +105,14 @@ class BaseDrone(Node):
         rclpy.spin_until_future_complete(self, future)
         return future.result()
 
-    def switch_mode_with_timeout(self, desired_mode: DroneState, timeout: rclpy.duration.Duration):
+    def switch_mode_with_timeout(self, desired_mode: FlightMode, timeout: rclpy.duration.Duration):
         """Try to switch mode. Returns true on success or false if mode switch fails or times out."""
         is_in_desired_mode = False
         start = self.get_clock().now()
         while not is_in_desired_mode and self.get_clock().now() - start < timeout:
             result = self.switch_mode(desired_mode)
             # Handle a successful switch or the case that the vehicle is already in expected mode
-            is_in_desired_mode = result.status or result.curr_mode == desired_mode
+            is_in_desired_mode = result.status or result.curr_mode == desired_mode.value
             time.sleep(1)
 
         return is_in_desired_mode
@@ -163,13 +164,9 @@ class BaseDrone(Node):
         except Exception as e:
             self.get_logger().error(f'Arm service call failed: {e}')
 
-    def switch_mode(self, mode: DroneState):
+    def switch_mode(self, mode: FlightMode):
         req = ModeSwitch.Request()
-        mode_map = {
-            DroneState.GUIDED: 4,  # GUIDED mode for copter
-            DroneState.TAKING_OFF: 4,  # Use GUIDED for takeoff
-        }
-        req.mode = mode_map.get(mode, 4)  # Default to GUIDED
+        req.mode = mode.value
         future = self.mode_client.call_async(req)
         rclpy.spin_until_future_complete(self, future)
         return future.result()
@@ -181,6 +178,49 @@ class BaseDrone(Node):
         rclpy.spin_until_future_complete(self, future)
         return future.result()
 
+    def gps_origin_callback(self, msg):
+        """Capture the GPS origin (home position) when it's set"""
+        lat = msg.position.latitude
+        lon = msg.position.longitude
+        if self.home_lat != lat or self.home_lon != lon:
+            self.home_lon = lon
+            self.home_lat = lat
+            self.home_alt = msg.position.altitude
+
+            # Initialize the coordinate transformer
+            self.setup_coordinate_transformer()
+
+            self.get_logger().info(
+                f"Home position set: lat={self.home_lat:.8f}, "
+                f"lon={self.home_lon:.8f}, alt={self.home_alt:.2f}"
+            )
+
+    def setup_coordinate_transformer(self):
+        """Set up pyproj transformer for local to global conversions"""
+        # Create a local tangent plane projection centered at home
+        # Using Transverse Mercator projection
+        proj_string = (
+            f"+proj=tmerc +lat_0={self.home_lat} +lon_0={self.home_lon} "
+            f"+k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs"
+        )
+        self.transformer = Transformer.from_crs(
+            proj_string,  # Local coordinate system
+            "EPSG:4326",  # WGS84
+            always_xy=True
+        )
+
+        self.get_logger().info("Coordinate transformer initialized")
+
+    def xy_to_latlon(self, x, y):
+        """Convert local NED coordinates to lat/lon using pyproj
+        Args:
+            x: North position in meters (positive north)
+            y: East position in meters (positive east)
+        """
+        # pyproj expects x=east, y=north, so swap the inputs
+        lon, lat = self.transformer.transform(y, x)
+        return lat, lon
+
     def start_mission(self):
         """Start waypoint mission using DDS"""
         self.get_logger().info(f"Starting mission for drone {self.drone_id}")
@@ -188,19 +228,30 @@ class BaseDrone(Node):
 
         # Simple waypoint following
         for i, wp in enumerate(self.waypoints):
-            self.send_position_command_dds(wp[0], wp[1], wp[2])
-            self.get_logger().info(f"Drone {self.drone_id} heading to waypoint {i + 1}: {wp}")
+            lat, lon = self.xy_to_latlon(wp[0], wp[1])
+            self.send_position_command_dds(lat, lon, wp[2])
+            rclpy.spin_once(self)
+            self.get_logger().info(f"Drone {self.drone_id} heading to waypoint {i + 1}: {lat, lon, wp[2]}")
             time.sleep(10)  # Wait between waypoints
+
+        self.get_logger().info("Mission complete, returning to launch")
+        self.state = DroneState.RETURNING
+        if not self.switch_mode_with_timeout(FlightMode.RTL, rclpy.duration.Duration(seconds=10)):
+            self.get_logger().error("Unable to switch to RTL mode, sending home position")
+            self.send_position_command_dds(self.home_lat, self.home_lon, self.home_alt)
+
 
     def send_position_command_dds(self, lat, lon, alt):
         msg = GlobalPosition()
         msg.header.stamp = self.get_clock().now().to_msg()
-        msg.type_mask = 0
+        msg.type_mask = 0b0000111111111000  # Use position only, ignore velocity/acceleration
         msg.header.frame_id = "map"
-        msg.coordinate_frame = 5  # FRAME_GLOBAL_INT
-        msg.latitude = float(lat)
-        msg.longitude = float(lon)
-        msg.altitude = float(alt)
+        msg.coordinate_frame = 6  # MAV_FRAME_GLOBAL_RELATIVE_ALT_INT
+
+        # Convert to integers as expected by INT frames
+        msg.latitude = float(lat * 1e7)  # Convert to float32 (degrees * 1e7)
+        msg.longitude = float(lon * 1e7)  # Convert to float32 (degrees * 1e7)
+        msg.altitude = float(alt * 1000)  # Convert to millimeters (relative to home)
 
         self._global_pos_pub.publish(msg)
 
@@ -230,21 +281,22 @@ def main(args=None):
 
     # Wait for a position estimate before switching to GUIDED
     if not node.wait_for_position_estimate(rclpy.duration.Duration(seconds=20)):
-            raise RuntimeError("No position estimate available")
+        raise RuntimeError("No position estimate available")
 
-    if not node.switch_mode_with_timeout(DroneState.GUIDED, rclpy.duration.Duration(seconds=10)):
+    if not node.switch_mode_with_timeout(FlightMode.GUIDED, rclpy.duration.Duration(seconds=10)):
         raise RuntimeError("Unable to switch to GUIDED mode")
 
-        # Takeoff
-    takeoff_result = node.takeoff(10.0)
+    # Takeoff
+    takeoff_result = node.takeoff(50.0)
     if not takeoff_result.status:
         raise RuntimeError("Takeoff failed")
+    node.get_logger().info(f"Drone take off status: {takeoff_result.status}")
     # Wait for takeoff completion
     time.sleep(15)
 
     node.get_logger().info(f"Drone {node.drone_id} initialized with DDS")
-    node.start_mission()
     node.get_logger().info(f"Drone {node.drone_id} started mission")
+    node.start_mission()
 
     try:
         rclpy.spin(node)
