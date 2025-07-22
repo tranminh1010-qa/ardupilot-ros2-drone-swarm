@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     cmake libasio-dev libtinyxml2-dev ca-certificates curl gnupg \
     lsb-release openjdk-11-jdk gradle \
     netcat-openbsd iproute2 iputils-ping \
-    socat screen minicom \
+    socat screen minicom bc\
     && rm -rf /var/lib/apt/lists/*
 
 # Add ROS 2 repository and install DDS packages
@@ -43,7 +43,9 @@ WORKDIR /root
 RUN mkdir -p /root/ardu_ws/src && cd /root/ardu_ws/src \
     && git clone --recurse-submodules https://github.com/ArduPilot/ardupilot.git \
     && cd ardupilot && git submodule update --init --recursive \
-    && ./waf distclean && ./waf configure --board sitl --enable-DDS --debug
+    && ./waf distclean && ./waf configure --board sitl --enable-DDS --debug \
+    && ./waf copter \
+    && ./waf plane
 
 RUN pip3 install mavproxy
 
@@ -73,6 +75,11 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
 RUN pip3 install --upgrade pip setuptools wheel
 
 RUN pip3 install -U wxPython
+
+# Make sure the build artifacts are preserved
+RUN mkdir -p /ardupilot/build/sitl/bin && \
+    cp -r /ardupilot/build /ardupilot/build.bak || true \
+
 # Expose necessary ports
 EXPOSE 2019/udp 5501-5591 5760-5780 14550-14750/udp 9002-9052/udp
 

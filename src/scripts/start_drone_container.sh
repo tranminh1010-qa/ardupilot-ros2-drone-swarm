@@ -2,11 +2,21 @@
 
 set -e
 
+LAT_BASE=40.072842
+LON_BASE=-105.230575
+ALT_BASE=1586
+YAW=0
+
 # Environment variables from Docker Compose
 INSTANCE=${INSTANCE:-0}
 SYSID_THISMAV=${SYSID_THISMAV:-$((INSTANCE+1))}
 ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-$INSTANCE}
 MICRO_ROS_AGENT_PORT=${MICRO_ROS_AGENT_PORT:-2019}
+
+# Offset calculation (approximately 5 meters between drones)
+# 0.000045 degrees ≈ 5 meters
+LAT_OFFSET=$(awk -v base=40.072842 -v inst="$INSTANCE" 'BEGIN{printf "%.6f", base + (inst * 0.000045)}')
+LON_OFFSET=$(awk -v base=-105.230575 -v inst="$INSTANCE" 'BEGIN{printf "%.6f", base + (inst * 0.000045)}')
 
 # Calculated ports
 MAVLINK_TCP_PORT=$((5760 + 10 * INSTANCE))
@@ -30,12 +40,13 @@ cat /tmp/instance_dds.parm
 cd -
 sim_vehicle.py \
     --vehicle ArduCopter \
+    --no-rebuild \
     --out 127.0.0.1:${MAVPROXY_UDP_PORT} \
     --out 127.0.0.1:${DDS_UDP_PORT} \
     --out 127.0.0.1:${SITL_PORT} \
     --out 127.0.0.1:${GAZEBO_JSON_PORT} \
     --out 127.0.0.1:${MAVLINK_TCP_PORT} \
-    --custom-location=40.072842,-105.230575,1586,0 \
+    --custom-location="${LAT_OFFSET}","${LON_OFFSET}",${ALT_BASE},${YAW} \
     --sysid $((INSTANCE+1)) \
     --wipe False \
     --instance "${INSTANCE}" \
