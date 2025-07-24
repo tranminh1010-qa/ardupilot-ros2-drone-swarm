@@ -3,6 +3,7 @@ set -e
 
 echo "=== Swarm Controller Starting ==="
 echo "ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-1}"
+echo "NUM_DRONES: ${NUM_DRONES:-2}"
 
 # Source ROS2 environment
 source /opt/ros/humble/setup.bash
