@@ -1,9 +1,10 @@
-# Simplified Dockerfile.ardupilot - ArduPilot with DDS support
+# ArduPilot SITL with DDS support
 FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Etc/UTC
 
-# Install all dependencies in one layer including serial port tools
+# Install system dependencies
 RUN apt-get update && apt-get install --no-install-recommends -y \
     build-essential ccache g++ gawk git make wget sudo \
     software-properties-common python3 python3-pip python3-dev \
@@ -11,29 +12,27 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     cmake libasio-dev libtinyxml2-dev ca-certificates curl gnupg \
     lsb-release openjdk-11-jdk gradle \
     netcat-openbsd iproute2 iputils-ping \
-    socat screen minicom bc\
+    socat screen minicom bc \
+    net-tools gdb lsof pkg-config libgtk-3-dev vim nano \
     && rm -rf /var/lib/apt/lists/*
 
-# Add ROS 2 repository and install DDS packages
+# Install ROS2 DDS packages
 RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" > /etc/apt/sources.list.d/ros2.list \
     && apt-get update && apt-get install --no-install-recommends -y \
     libfastrtps-dev libfastcdr-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python packages (including missing geocoder)
-# Replace the existing pip install line with:
+# Install Python packages
 RUN pip3 install --no-cache-dir -U \
     "numpy<2.0" \
     future lxml pexpect empy==3.3.4 pymavlink pyserial pyudev \
-    matplotlib scipy geocoder geopy pyproj \
-    && pip3 install --no-cache-dir git+https://github.com/dronekit/dronekit-python.git@master
+    matplotlib scipy geocoder geopy pyproj dronekit mavproxy
 
 # Clone & install Micro-XRCE-DDS-Gen dependency
 RUN git clone --recurse-submodules https://github.com/ardupilot/Micro-XRCE-DDS-Gen.git /root/Micro-XRCE-DDS-Gen \
     && cd /root/Micro-XRCE-DDS-Gen \
-    && ./gradlew assemble \
-    && echo "export PATH=\$PATH:/root/Micro-XRCE-DDS-Gen/scripts" >> /root/.bashrc
+    && ./gradlew assemble
 
 # Update PATH to include microxrceddsgen
 ENV PATH="/root/Micro-XRCE-DDS-Gen/scripts:${PATH}"
@@ -44,44 +43,33 @@ RUN mkdir -p /root/ardu_ws/src && cd /root/ardu_ws/src \
     && git clone --recurse-submodules https://github.com/ArduPilot/ardupilot.git \
     && cd ardupilot && git submodule update --init --recursive \
     && ./waf distclean && ./waf configure --board sitl --enable-DDS --debug \
-    && ./waf copter \
-    && ./waf plane
+    && ./waf copter -v \
+    && ./waf plane -v
 
-RUN pip3 install mavproxy
 
 # Set environment variables and PATH
 ENV PATH="/root/ardu_ws/src/ardupilot/Tools/autotest:${PATH}"
 ENV PATH="/root/ardu_ws/src/ardupilot/build/sitl/bin:${PATH}"
 ENV PATH="/usr/local/bin:/usr/bin:${PATH}"
-ENV PYTHONPATH="/root/ardu_ws/src/ardupilot/Tools/autotest:${PYTHONPATH}"
+ENV PYTHONPATH="/root/ardu_ws/src/ardupilot/Tools/autotest"
 ENV ARDUPILOT_DDS=1
 ENV AP_DDS_UDP_PORT=2019
+
+# Create logs directory
+RUN mkdir -p /root/logs /sitl
 
 # Verify installations
 RUN echo "=== Verifying installations ===" \
     && which python3 && python3 --version \
     && which socat && socat -V | head -1 \
+    && ls -la /root/ardu_ws/src/ardupilot/Tools/autotest/sim_vehicle.py \
+    && ls -la /root/ardu_ws/src/ardupilot/build/sitl/bin/ \
     && echo "=== All tools verified ==="
 
-# Create basic directory structure
-RUN mkdir -p /root/logs
-
-WORKDIR /root/ardu_ws/src/ardupilot
-
-#Networking and Debugging tools
-RUN apt-get update && apt-get install --no-install-recommends -y \
-  net-tools gdb lsof pkg-config libgtk-3-dev
-
-RUN pip3 install --upgrade pip setuptools wheel
-
-RUN pip3 install -U wxPython
-
-# Make sure the build artifacts are preserved
-RUN mkdir -p /ardupilot/build/sitl/bin && \
-    cp -r /ardupilot/build /ardupilot/build.bak || true \
+WORKDIR /root/ardu_ws/
 
 # Expose necessary ports
 EXPOSE 2019/udp 5501-5591 5760-5780 14550-14750/udp 9002-9052/udp
 
-# Use external startup script
-#CMD ["/root/scripts/start_drone_container.sh"]
+# Default command
+CMD ["/bin/bash"]
