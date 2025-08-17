@@ -17,10 +17,8 @@ from scripts.drone_state import DroneState, FlightMode
 
 from scripts.time_out_retry import TimeoutRetry
 
-from scripts.sys_id_filter import SysIdFilter
 
-
-def mode_success_check_factory(mode: FlightMode, *args, **kwargs):
+def mode_success_check_factory(mode: FlightMode):
     """Factory that creates success check for mode switching"""
     def check(result):
         return result and (result.status or result.curr_mode == mode.value)
@@ -38,14 +36,17 @@ class BaseDrone(Node):
         self.state = DroneState.INITIALIZING
 
         self.get_logger().info(f"Initializing drone {self.drone_id} with DDS interface")
+        self.get_logger().info(f"Using system ID: {self.sysid}")
 
-        # Service clients for DDS
+        # Service clients for DDS - using drone-specific topics
         self._arm_topic = self.get_parameter("arm_topic").get_parameter_value().string_value
+        self.get_logger().info(f"Arm service topic: {self._arm_topic}")
         self.arm_client = self.create_client(ArmMotors, self._arm_topic)
         while not self.arm_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('arm service not available, waiting again...')
 
         self._mode_topic = self.get_parameter("mode_topic").get_parameter_value().string_value
+        self.get_logger().info(f"Mode service topic: {self._mode_topic}")
         self.mode_client = self.create_client(ModeSwitch, self._mode_topic)
         while not self.mode_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('mode switch service not available, waiting again...')
@@ -79,6 +80,8 @@ class BaseDrone(Node):
         self.declare_parameter("mode_topic", "/ap/mode_switch")
         self.declare_parameter("pose_topic", "/ap/pose/filtered")
         self.declare_parameter("global_position_topic", "/ap/cmd_gps_pose")
+        self.declare_parameter("takeoff_topic", "/ap/experimental/takeoff")
+        
         # Then get parameter values
         self.drone_id = self.get_parameter('drone_id').get_parameter_value().integer_value
         self._arm_topic = self.get_parameter("arm_topic").get_parameter_value().string_value
@@ -87,19 +90,18 @@ class BaseDrone(Node):
         self._pose_topic = self.get_parameter("pose_topic").get_parameter_value().string_value
 
     def _setup_subscriptions(self):
-        """Set up subscriptions with SYSID filtering"""
+        """Set up subscriptions """
         ardupilot_qos = QoSProfile(
             depth=10,
             reliability=ReliabilityPolicy.BEST_EFFORT,
             durability=DurabilityPolicy.VOLATILE
         )
 
-        # Apply SYSID filter decorator to callbacks
-        self.status_callback = SysIdFilter(self.sysid)(self._status_callback_impl)
-        self.pose_callback = SysIdFilter(self.sysid)(self._pose_callback_impl)
+        self.status_callback = self._status_callback_impl
+        self.pose_callback = self._pose_callback_impl
 
         # ADD: GPS origin callback with SYSID filter
-        self.gps_origin_callback = SysIdFilter(self.sysid)(self._gps_origin_callback_impl)
+        self.gps_origin_callback = self._gps_origin_callback_impl
 
         # Create subscriptions
         self.status_subscription = self.create_subscription(
@@ -114,7 +116,7 @@ class BaseDrone(Node):
         )
 
     @TimeoutRetry(timeout_sec=30.0, retry_interval=1.0,
-                  success_check=lambda result: result and result.result)
+                  success_check_factory=lambda: lambda result: result and result.result)
     def arm(self):
         req = ArmMotors.Request()
         req.arm = True

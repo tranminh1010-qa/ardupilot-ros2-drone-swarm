@@ -41,10 +41,9 @@ services:
     init: true
     network_mode: host
     environment:
-      - NUM_DRONES=1
+      - NUM_DRONES=2
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
       #- ROS_DISCOVERY_SERVER=172.20.0.10:11888
-      - ROS_DOMAIN_ID=0
     volumes:
       - ./src/swarm_control:/ros2_ws/src/swarm_control
       - ./logs:/root/logs:delegated
@@ -105,7 +104,7 @@ services:
     environment:
       - MICRO_ROS_AGENT_DISCOVERY_TIMEOUT=10
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-      - ROS_DOMAIN_ID=0
+      - ROS_DOMAIN_ID=1
     command: ["udp4", "--port", "2019", "-v4"]
 
   micro-ros-agent-drone2:
@@ -119,5 +118,5 @@ services:
       environment:
         - MICRO_ROS_AGENT_DISCOVERY_TIMEOUT=10
         - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-        - ROS_DOMAIN_ID=0
+        - ROS_DOMAIN_ID=2
       command: ["udp4", "--port", "2020", "-v4"]

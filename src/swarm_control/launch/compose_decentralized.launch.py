@@ -29,7 +29,6 @@ def generate_launch_description():
         try:
             num_drones = int(context.launch_configurations['num_drones'])
             LogInfo(msg = f"Launching ROS2 Node for num_drones:{num_drones}")
-            ros_domain_id = '0'
             rmw_implementation = str(context.launch_configurations.get('rmw_implementation','rmw_fastrtps_cpp'))
             base_mavlink_port = 14550
             base_ros_port = 14551
@@ -45,6 +44,8 @@ def generate_launch_description():
             for i in range(num_drones):
                 drone_id = i + 1
                 instance = i
+                # Each drone gets its own ROS_DOMAIN_ID (INSTANCE + 1)
+                ros_domain_id = str(drone_id)
                 mavlink_port = base_mavlink_port + (i * 10)
                 ros_port = base_ros_port + (i * 10)
                 wp = chunks[i] if i < len(chunks) else wps[:4]  # Fallback waypoints
