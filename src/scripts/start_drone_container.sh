@@ -10,7 +10,7 @@ YAW=0
 # Environment variables from Docker Compose
 INSTANCE=${INSTANCE:-0}
 SYSID_THISMAV=${SYSID_THISMAV:-$((INSTANCE+1))}
-ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-$INSTANCE}
+ROS_DOMAIN_ID=$((INSTANCE+1))
 MICRO_ROS_AGENT_PORT=${MICRO_ROS_AGENT_PORT:-2019}
 
 # Offset calculation (approximately 5 meters between drones)
@@ -26,15 +26,14 @@ DDS_UDP_PORT=$((2019 + INSTANCE))
 GAZEBO_JSON_PORT=$((9002 + 10 * INSTANCE))
 
 # Create instance directory for parameter isolation
-mkdir -p /sitl/instance_${INSTANCE}
-cd /sitl/instance_${INSTANCE}
+mkdir -p /sitl/instance_"${INSTANCE}"
+cd /sitl/instance_"${INSTANCE}"
 
-# UPDATE parameter file to set correct DDS port and sys_mav_id:
-echo "DDS_UDP_PORT=${MICRO_ROS_AGENT_PORT}" > /tmp/instance_dds.parm
-echo "SYSID_THISMAV=${SYSID_THISMAV}" >> /tmp/instance_dds.parm
-#echo "DDS_NAMESPACE=drone${INSTANCE}" >> /tmp/instance_dds.parm
-cat /config/dds_swarm.parm >> /tmp/instance_dds.parm
-cat /tmp/instance_dds.parm
+# UPDATE parameter file to set correct DDS port, domain ID, and sys_mav_id:
+touch instance_dds.parm
+echo -e "DDS_UDP_PORT=${MICRO_ROS_AGENT_PORT}\nSYSID_THISMAV=${SYSID_THISMAV}\nDDS_DOMAIN_ID=${ROS_DOMAIN_ID}\n" > instance_dds.parm
+cat /config/dds_swarm.parm >> instance_dds.parm
+cat instance_dds.parm
 
 # Start ArduPilot SITL
 cd -
@@ -50,7 +49,7 @@ sim_vehicle.py \
     --sysid $((INSTANCE+1)) \
     --wipe False \
     --instance "${INSTANCE}" \
-    --add-param-file=/tmp/instance_dds.parm \
+    --add-param-file=/sitl/instance_"${INSTANCE}"/instance_dds.parm \
     --enable-DDS
     #--model=JSON \  #model and frame require gazebo to be running
    # --frame gazebo-iris \
