@@ -181,7 +181,7 @@ class BaseDrone(Node):
         """Capture the GPS origin (home position) when it's set - implementation"""
         lat = msg.position.latitude
         lon = msg.position.longitude
-        if self.home_lat != lat or self.home_lon != lon:
+        if self.home_lat is None or self.home_lon is None or self.home_lat != lat or self.home_lon != lon:
             self.home_lon = lon
             self.home_lat = lat
             self.home_alt = msg.position.altitude
