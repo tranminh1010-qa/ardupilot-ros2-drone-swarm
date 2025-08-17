@@ -11,6 +11,8 @@ FS_THR_ENABLE 0
 FS_GCS_ENABLE 0
 ARMING_CHECK 65470 # not include bit 6 (RC check).
 RC_OPTIONS  0       # Clear bit 5 to disable throttle arming check
+AUTO_OPTIONS 0      # Disable auto mode arming
+DISARM_DELAY 10     # Auto disarm after 10 seconds
 BATT_LOW_VOLT 0
 BATT_LOW_MAH 0
 ############### Default parameters from copter.parm#################

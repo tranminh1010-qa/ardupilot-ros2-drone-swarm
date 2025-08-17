@@ -66,8 +66,6 @@ services:
     environment:
       - INSTANCE=0
       - SYSID_THISMAV=1
-      - ROS_DOMAIN_ID=0
-      - DDS_UDP_PORT=2019
       - MICRO_ROS_AGENT_PORT=2019
  #     - ROS_DISCOVERY_SERVER=172.20.0.10:11888
     volumes:
@@ -86,9 +84,8 @@ services:
     environment:
       - INSTANCE=1
       - SYSID_THISMAV=2
-      - ROS_DOMAIN_ID=0
-      - DDS_UDP_PORT=2020
       - MICRO_ROS_AGENT_PORT=2020
+      - AP_DDS_UDP_PORT=2020
    #   - ROS_DISCOVERY_SERVER=172.20.0.10:11888
     volumes:
       - ./src/swarm_control/parameters:/config
@@ -123,5 +120,4 @@ services:
         - MICRO_ROS_AGENT_DISCOVERY_TIMEOUT=10
         - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
         - ROS_DOMAIN_ID=0
-        - ROS_NAMESPACE=drone2
       command: ["udp4", "--port", "2020", "-v4"]
