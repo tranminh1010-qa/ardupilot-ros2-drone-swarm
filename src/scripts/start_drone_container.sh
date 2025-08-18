@@ -8,10 +8,14 @@ ALT_BASE=1586
 YAW=0
 
 # Environment variables from Docker Compose
+# When scaling with docker compose, INSTANCE should be passed as an env var
 INSTANCE=${INSTANCE:-0}
+NUM_DRONES=${NUM_DRONES:-2}
+
+# Calculate derived values
 SYSID_THISMAV=${SYSID_THISMAV:-$((INSTANCE+1))}
 ROS_DOMAIN_ID=$((INSTANCE+1))
-MICRO_ROS_AGENT_PORT=${MICRO_ROS_AGENT_PORT:-2019}
+MICRO_ROS_AGENT_PORT=$((2019+INSTANCE))
 
 # Offset calculation (approximately 5 meters between drones)
 # 0.000045 degrees ≈ 5 meters
