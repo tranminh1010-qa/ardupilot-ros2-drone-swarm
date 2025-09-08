@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import json
-import os
 from launch import LaunchDescription
 from launch.actions import ExecuteProcess, TimerAction, LogInfo, DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import LaunchConfiguration
@@ -8,7 +7,7 @@ from launch_ros.actions import Node
 from launch.event_handlers import OnProcessExit
 from launch.actions import RegisterEventHandler
 
-from scripts.points_distributor import generate_grid_waypoints, split_by_sector, split_by_grid
+from scripts.points_distributor import generate_grid_waypoints, split_by_grid
 
 
 def generate_launch_description():
@@ -36,9 +35,9 @@ def generate_launch_description():
             action_list = []
 
             # Generate waypoints and distribute to drones
-            wps = generate_grid_waypoints(field_size=80.0, grid_points=4, height=30.0)
+            wps = generate_grid_waypoints(field_size=80.0, grid_points=5, height=30.0)
+            chunks = split_by_grid(wps, num_drones)
             action_list.append(LogInfo(msg=f"Generated {len(wps)} waypoints for {num_drones} drones."))
-            chunks = split_by_sector(wps, num_drones)
             # Create ROS nodes for each drone
             drone_nodes = []
             for i in range(num_drones):
@@ -48,7 +47,7 @@ def generate_launch_description():
                 ros_domain_id = str(drone_id)
                 mavlink_port = base_mavlink_port + (i * 10)
                 ros_port = base_ros_port + (i * 10)
-                wp = chunks[i] if i < len(chunks) else wps[:4]  # Fallback waypoints
+                wp = chunks[i]
                 wp_json = json.dumps(wp)
                 # Create drone node - connects to existing SITL instance
 

@@ -100,7 +100,7 @@ class BaseDrone(Node):
         self.status_callback = self._status_callback_impl
         self.pose_callback = self._pose_callback_impl
 
-        # ADD: GPS origin callback with SYSID filter
+        # GPS origin callback
         self.gps_origin_callback = self._gps_origin_callback_impl
 
         # Create subscriptions
@@ -186,6 +186,7 @@ class BaseDrone(Node):
             self.home_lat = lat
             self.home_alt = msg.position.altitude
 
+        if self.transformer is None:
             # Initialize the coordinate transformer
             self.setup_coordinate_transformer()
 
@@ -223,6 +224,15 @@ class BaseDrone(Node):
     def start_mission(self):
         """Start waypoint mission using DDS"""
         self.get_logger().info(f"Starting mission for drone {self.drone_id}")
+        
+        # Wait for transformer to be initialized
+        if self.transformer is None:
+            self.get_logger().info("Waiting for GPS origin to initialize transformer...")
+            timeout = 30  # 30 second timeout
+            start_time = time.time()
+            while self.transformer is None and (time.time() - start_time) < timeout:
+                rclpy.spin_once(self, timeout_sec=0.1)
+
         self.state = DroneState.FLYING
 
         # Simple waypoint following
