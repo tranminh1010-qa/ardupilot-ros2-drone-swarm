@@ -33,16 +33,6 @@ def distance_between(wp1, wp2):
     return np.sqrt((wp2[0] - wp1[0]) ** 2 + (wp2[1] - wp1[1]) ** 2 + (wp2[2] - wp1[2]) ** 2)
 
 
-def path_distance(waypoints):
-    """Calculate total path distance for a sequence of waypoints"""
-    if len(waypoints) < 2:
-        return 0
-
-    total = 0
-    for i in range(len(waypoints) - 1):
-        total += distance_between(waypoints[i], waypoints[i + 1])
-    return total
-
 
 def sort_waypoints_by_path(waypoints):
     """Sort waypoints to minimize path length (greedy nearest neighbor approach)"""
@@ -69,85 +59,6 @@ def sort_waypoints_by_path(waypoints):
         path.append(remaining.pop(best_idx))
 
     return path
-
-
-def split_by_proximity(waypoints, num_drones):
-    """
-    Split waypoints based on spatial proximity using a simple centroid approach.
-    """
-    if num_drones >= len(waypoints):
-        return [[wp] for wp in waypoints[:num_drones]]
-
-    # Initialize centroids randomly from the waypoints
-    np.random.seed(42)  # For reproducibility
-    centroid_indices = np.random.choice(len(waypoints), num_drones, replace=False)
-    centroids = [waypoints[i] for i in centroid_indices]
-
-    # Assign waypoints to nearest centroid
-    clusters = [[] for _ in range(num_drones)]
-
-    for i in range(20):  # Max iterations for convergence
-        # Clear clusters
-        for cluster in clusters:
-            cluster.clear()
-
-        # Assign points to nearest centroid
-        for wp in waypoints:
-            distances = [distance_between(wp, centroid) for centroid in centroids]
-            nearest_centroid = np.argmin(distances)
-            clusters[nearest_centroid].append(wp)
-
-        # Recalculate centroids
-        new_centroids = []
-        for cluster in clusters:
-            if not cluster:
-                # If a cluster is empty, keep the old centroid
-                new_centroids.append(centroids[len(new_centroids)])
-                continue
-
-            # Calculate mean position
-            x = sum(p[0] for p in cluster) / len(cluster)
-            y = sum(p[1] for p in cluster) / len(cluster)
-            z = sum(p[2] for p in cluster) / len(cluster)
-            new_centroids.append((x, y, z))
-
-        # Check for convergence
-        if all(distance_between(c1, c2) < 0.001 for c1, c2 in zip(centroids, new_centroids)):
-            break
-
-        centroids = new_centroids
-
-    # Sort waypoints within each cluster for efficient paths
-    for i in range(num_drones):
-        if clusters[i]:
-            clusters[i] = sort_waypoints_by_path(clusters[i])
-
-    return clusters
-
-
-def split_by_sector(waypoints, num_drones):
-    """
-    Split waypoints by dividing the area into angular sectors from the center.
-    """
-    if num_drones >= len(waypoints):
-        return [[wp] for wp in waypoints[:num_drones]]
-
-    # Find center and calculate angles
-    points = np.array([(wp[0], wp[1]) for wp in waypoints])
-    center_x, center_y = np.mean(points, axis=0)
-
-    angles = [np.arctan2(wp[1] - center_y, wp[0] - center_x) % (2 * np.pi)
-              for wp in waypoints]
-
-    # Sort waypoints by angle
-    sorted_wps = [wp for _, wp in sorted(zip(angles, waypoints))]
-
-    # Distribute waypoints evenly across drones
-    drone_waypoints = [[] for _ in range(num_drones)]
-    for i, wp in enumerate(sorted_wps):
-        drone_waypoints[i % num_drones].append(wp)
-
-    return drone_waypoints
 
 
 def split_by_grid(waypoints, num_drones, grid_dims=None):
@@ -264,15 +175,8 @@ def plot_waypoints(waypoints_list, title):
 
 # Run the visualization to compare different splitting methods
 if __name__ == "__main__":
-    num_drones = 3
-    waypoints = generate_grid_waypoints(field_size=60.0, grid_points=6, height=8.0)
-
-    # Visualize different splitting methods
-    proximity_split = split_by_proximity(waypoints, num_drones)
-    plot_waypoints(proximity_split, "Proximity-Based Split")
-
-    sector_split = split_by_sector(waypoints, num_drones)
-    plot_waypoints(sector_split, "Sector-Based Split")
+    num_drones = 4
+    waypoints = generate_grid_waypoints(field_size=60.0, grid_points=5, height=8.0)
 
     grid_split = split_by_grid(waypoints, num_drones)
     plot_waypoints(grid_split, "Grid-Based Split")

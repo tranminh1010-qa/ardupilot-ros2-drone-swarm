@@ -29,7 +29,6 @@ services:
         source /opt/ros/humble/setup.bash &&
         fastdds discovery -i 0 -l 172.20.0.10 -p 11811
       "
-  
 
   swarm_controller:
     <<: *common-settings
@@ -41,7 +40,7 @@ services:
     init: true
     network_mode: host
     environment:
-      - NUM_DRONES=2
+      - NUM_DRONES=${NUM_DRONES:-2}
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
       #- ROS_DISCOVERY_SERVER=172.20.0.10:11888
     volumes:
@@ -49,74 +48,48 @@ services:
       - ./logs:/root/logs:delegated
       - ./src/scripts:/root/scripts:ro
       - ./src/dockerfiles/config:/root/config:ro
-    stdin_open: true
-    tty: true
-    command: [ "/bin/bash" ]
-#    command: [ "/root/scripts/start_swarm_controller.sh" ]
+#    stdin_open: true
+#    tty: true
+#    command: [ "/bin/bash" ]
+    command: [ "/root/scripts/start_swarm_controller.sh" ]
     depends_on:
       - discovery_server
 
-  drone_1:
+  drone_ardu:
+    profiles: ["manual"]
     build:
       context: ./src/dockerfiles
       dockerfile: Dockerfile.ardupilot
     network_mode: host
     tty: true #needed for mavproxy to run in non-interactive mode
     environment:
-      - INSTANCE=0
-      - SYSID_THISMAV=1
-      - MICRO_ROS_AGENT_PORT=2019
+      - INSTANCE=${INSTANCE:-0}
+      - NUM_DRONES=${NUM_DRONES:-2}
+      - SYSID_THISMAV=${SYSID_THISMAV:-1}
+      - MICRO_ROS_AGENT_PORT=${MICRO_ROS_AGENT_PORT:-2019}
  #     - ROS_DISCOVERY_SERVER=172.20.0.10:11888
     volumes:
       - ./src/swarm_control/parameters:/config
       - ./src/scripts:/root/scripts:ro
     command: ["/root/scripts/start_drone_container.sh"]
-    depends_on:
-      - micro-ros-agent-drone1
 
-  drone_2:
-    build:
-      context: ./src/dockerfiles
-      dockerfile: Dockerfile.ardupilot
-    network_mode: host
-    tty: true
-    environment:
-      - INSTANCE=1
-      - SYSID_THISMAV=2
-      - MICRO_ROS_AGENT_PORT=2020
-      - AP_DDS_UDP_PORT=2020
-   #   - ROS_DISCOVERY_SERVER=172.20.0.10:11888
-    volumes:
-      - ./src/swarm_control/parameters:/config
-      - ./src/scripts:/root/scripts:ro
-    command: ["/root/scripts/start_drone_container.sh"]
-    depends_on:
-      - micro-ros-agent-drone2
 
-  micro-ros-agent-drone1:
+  micro-ros-agent-drone:
     <<: *common-settings
+    profiles: ["manual"]
     build:
       context: ./src/dockerfiles
       dockerfile: Dockerfile.dds-agent
-    container_name: micro_ros_agent_drone1
     network_mode: host
     restart: unless-stopped
     environment:
+      - INSTANCE=${INSTANCE:-0}
+      - NUM_DRONES=${NUM_DRONES:-2}
       - MICRO_ROS_AGENT_DISCOVERY_TIMEOUT=10
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-      - ROS_DOMAIN_ID=1
-    command: ["udp4", "--port", "2019", "-v4"]
-
-  micro-ros-agent-drone2:
-      <<: *common-settings
-      build:
-        context: ./src/dockerfiles
-        dockerfile: Dockerfile.dds-agent
-      container_name: micro_ros_agent_drone2
-      network_mode: host
-      restart: unless-stopped
-      environment:
-        - MICRO_ROS_AGENT_DISCOVERY_TIMEOUT=10
-        - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-        - ROS_DOMAIN_ID=2
-      command: ["udp4", "--port", "2020", "-v4"]
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-1}
+      - MICRO_ROS_AGENT_PORT=${MICRO_ROS_AGENT_PORT:-2019}
+    volumes:
+      - ./src/scripts:/root/scripts:ro
+    entrypoint: ["/bin/bash"]
+    command: ["/root/scripts/start_micro_ros_agent_drone.sh"]
