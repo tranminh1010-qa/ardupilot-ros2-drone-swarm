@@ -43,11 +43,14 @@ for ((i=0; i<$NUM_DRONES; i++)); do
         micro-ros-agent-drone
     
     # Start the drone
+    # USE_GAZEBO=1 (exported before calling this script) couples SITL physics
+    # to a Gazebo instance running on the host (see start_drone_container.sh).
     docker compose run -d \
         -e INSTANCE=$i \
         -e NUM_DRONES=$NUM_DRONES \
         -e SYSID_THISMAV=$((i+1)) \
         -e MICRO_ROS_AGENT_PORT=$((2019+i)) \
+        -e USE_GAZEBO=${USE_GAZEBO:-0} \
         --name drone-ardu-$i \
         drone_ardu
 done

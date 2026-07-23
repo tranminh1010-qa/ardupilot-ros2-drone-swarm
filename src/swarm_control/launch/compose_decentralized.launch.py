@@ -7,7 +7,18 @@ from launch_ros.actions import Node
 from launch.event_handlers import OnProcessExit
 from launch.actions import RegisterEventHandler
 
-from scripts.points_distributor import generate_grid_waypoints, split_by_grid
+from scripts.points_distributor import generate_grid_waypoints, split_serpentine
+
+# Shared field origin — must match LAT_BASE/LON_BASE in
+# src/scripts/start_drone_container.sh so the mapped field is centred on the
+# swarm's home area. All drones convert waypoints with this ONE origin so the
+# 1/n chunks tile a single field instead of shifting with each drone's home.
+FIELD_ORIGIN_LAT = 40.072842
+FIELD_ORIGIN_LON = -105.230575
+
+# GstCameraPlugin stream ports: drone instance i streams H.264/RTP on
+# CAMERA_PORT_BASE + i (see src/custom_gz/models/base_drone*/model.sdf).
+CAMERA_PORT_BASE = 5600
 
 
 def generate_launch_description():
@@ -34,9 +45,11 @@ def generate_launch_description():
 
             action_list = []
 
-            # Generate waypoints and distribute to drones
+            # Generate waypoints and distribute to drones: balanced serpentine
+            # split — every drone gets a contiguous 1/n strip of the sweep,
+            # sizes differ by at most one waypoint, nothing is dropped.
             wps = generate_grid_waypoints(field_size=80.0, grid_points=5, height=30.0)
-            chunks = split_by_grid(wps, num_drones)
+            chunks = split_serpentine(wps, num_drones)
             action_list.append(LogInfo(msg=f"Generated {len(wps)} waypoints for {num_drones} drones."))
             # Create ROS nodes for each drone
             drone_nodes = []
@@ -56,6 +69,12 @@ def generate_launch_description():
                     executable='base_drone_dds.py',
                     name=f'drone{drone_id}',
                     output='screen',
+                    # Self-heal against EKF/GPS warmup races: a node that crashes
+                    # during startup (arm/position/GUIDED wait) is relaunched and
+                    # retries once the SITL instance's EKF is ready. Successful nodes
+                    # call rclpy.spin() forever, so respawn only re-runs failures.
+                    respawn=True,
+                    respawn_delay=5.0,
                     parameters=[{
                         'drone_id': drone_id,
                         'mavlink_connection': f'udp:localhost:{ros_port}',
@@ -63,6 +82,9 @@ def generate_launch_description():
                         'instance': instance,
                         'mavlink_port': mavlink_port,
                         'ros_port': ros_port,
+                        'field_origin_lat': FIELD_ORIGIN_LAT,
+                        'field_origin_lon': FIELD_ORIGIN_LON,
+                        'camera_port': CAMERA_PORT_BASE + instance,
                     }],
                     additional_env={
                         'ROS_DOMAIN_ID': ros_domain_id,

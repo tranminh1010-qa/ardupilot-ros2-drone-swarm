@@ -10,14 +10,44 @@ ArduPilot ROS2 Swarm - A scalable drone swarm simulation system combining ArduPi
 
 ### Starting the Swarm
 ```bash
-# Build and start swarm (use -b flag to rebuild Docker images)
-./start_swarm.sh -b    # Build images first
+# start_swarm.sh takes ONLY a drone count (no build flag). Default is 2.
 ./start_swarm.sh 4     # Start with 4 drones
 ./start_swarm.sh 8     # Start with 8 drones
+
+# Rebuild images after Dockerfile/dependency changes, then start
+docker compose build
+./start_swarm.sh 4
 
 # Check swarm status
 ./src/scripts/check_swarm_status.sh 4  # Check status for 4 drones
 ```
+
+`start_swarm.sh` first brings up `discovery_server` + `swarm_controller` via
+`docker compose up -d`, then loops `docker compose run -d` per instance to launch the
+`drone_ardu` and `micro-ros-agent-drone` services (both gated behind the `manual` compose
+profile), naming containers `drone-ardu-<i>` and `micro-ros-agent-drone-<i>`.
+
+### Gazebo Visualization (optional)
+```bash
+# Start Gazebo FIRST (host GUI; --headless for server only), THEN the swarm:
+./start_gazebo.sh &
+USE_GAZEBO=1 ./start_swarm.sh 4
+```
+`USE_GAZEBO=1` switches SITL physics to Gazebo's JSON FDM backend (`--frame
+gazebo-iris --model JSON`); each drone model in `src/custom_gz/worlds/swarm_drone.sdf`
+binds FDM port `9002 + 10*instance` via a dedicated model dir
+(`src/custom_gz/models/base_drone{,_1,_2,_3}`) — SDF `<include>` cannot override a
+nested plugin's port, so the port is baked into each model. In Gazebo mode the
+container startup appends `gazebo-iris.parm` (X-frame) after `dds_swarm.parm`;
+without it the plus-frame mixing produces no lift while the mission runs open-loop.
+Requires the ardupilot_gazebo plugin build on the host (paths set in `start_gazebo.sh`).
+
+Verify flight by actual `rel_alt` gain (pymavlink on UDP `14550+instance`), never by
+takeoff service ACKs — those succeed even if the vehicle stays on the ground.
+
+Gotcha: QGroundControl's virtual joystick (`virtualJoystick=true` in
+`~/.config/QGroundControl/QGroundControl.ini`) streams centered throttle to its active
+vehicle, which then fails arming with "Throttle too high". Keep it disabled.
 
 ### Stopping the Swarm
 ```bash
@@ -54,7 +84,7 @@ ros2 launch swarm_control compose_decentralized.launch.py num_drones:=4
 ```
 ArduPilot SITL ←→ DDS/Micro-ROS Agent ←→ ROS2 Nodes (base_drone_dds.py)
      ↓
-MAVLink (port 5760+ID for GCS connection)
+MAVLink TCP (port 5760 + 10*ID for GCS connection)
 ```
 
 ### Key Components
@@ -75,9 +105,17 @@ MAVLink (port 5760+ID for GCS connection)
    - `micro-ros-agent-drone-{ID}`: DDS communication bridges
 
 ### Port Allocation
-- MAVLink: 5760 + drone_id (e.g., drone 0 = 5760, drone 1 = 5761)
-- SITL: 9002 + drone_id
-- ROS2 Domain: 10 + drone_id (domain isolation per drone)
+Authoritative source is `src/scripts/start_drone_container.sh` (`INSTANCE` is 0-indexed):
+- MAVLink TCP (GCS/QGC):   `5760 + 10*INSTANCE`  (drone 0 = 5760, drone 1 = 5770)
+- SITL:                    `5501 + 10*INSTANCE`
+- MAVProxy UDP out:        `14550 + INSTANCE`
+- Micro-ROS Agent / DDS:   `2019 + INSTANCE`
+- Gazebo JSON:             `9002 + 10*INSTANCE`
+- ROS_DOMAIN_ID:           `INSTANCE + 1`  (domain isolation per drone)
+- SYSID_THISMAV:           `INSTANCE + 1`
+
+Note: `check_swarm_status.sh` computes the MAVProxy port as `14550 + (i-1)*10` with a
+1-indexed loop — a known inconsistency with the per-instance formula above.
 
 ## Critical Implementation Details
 
@@ -88,17 +126,26 @@ MAVLink (port 5760+ID for GCS connection)
 - Home position must be set before arming
 
 ### State Management
-The system uses a state machine in `base_drone_dds.py`:
-- IDLE → ARMING → TAKING_OFF → NAVIGATING → LANDING → LANDED
-- State transitions controlled by ArduPilot mode changes and mission progress
+The `DroneState` enum lives in `src/swarm_control/scripts/drone_state.py` (imported by
+`base_drone_dds.py`). The full set of states:
+- Connection: `INITIALIZING` → `CONNECTING` → `CONNECTED`
+- Pre-flight: `DISARMED` → `ARMING` → `ARMED`
+- Operation: `TAKING_OFF` → `FLYING` → `RETURNING` → `LANDING` → `LANDED`
+- Error: `ERROR`, `FAILSAFE`
+
+`drone_state.py` also defines the `FlightMode` enum (ArduCopter mode numbers: GUIDED=4,
+AUTO=3, RTL=6, LAND=9, etc.). State transitions are driven by ArduPilot mode/heartbeat
+changes and mission progress.
 
 ### Message Types
 - ArduPilot DDS messages: `GlobalPosition`, `Heartbeat`, `Altitude`, `LocalPose`
-- Custom ROS2 messages: `DroneState`, `MissionCommand`
 - MAVLink protocol for GCS compatibility
+- Note: there is no `msg/` package with custom `.msg` definitions. `DroneState` and
+  `FlightMode` are plain Python enums, not ROS2 interface messages.
 
 ### Domain Isolation
-Each drone operates in its own ROS2 domain (10 + drone_id) to prevent cross-talk between instances.
+Each drone operates in its own ROS2 domain (`drone_id + 1`) to prevent cross-talk between
+instances.
 
 ## Common Development Tasks
 
@@ -114,17 +161,25 @@ Edit `src/swarm_control/scripts/points_distributor.py`:
 - Update the waypoint distribution logic
 
 ### Adjusting Drone Parameters
-ArduPilot parameters in `src/dockerfiles/config/`:
-- Flight modes, speeds, and safety settings
-- GPS simulation parameters
+ArduPilot SITL parameters live in `src/swarm_control/parameters/dds_swarm.parm` (flight
+modes, speeds, safety, and GPS/DDS settings). At container startup,
+`start_drone_container.sh` prepends per-instance `DDS_UDP_PORT`, `SYSID_THISMAV`, and
+`DDS_DOMAIN_ID` into `instance_dds.parm`, then appends `dds_swarm.parm`.
+
+FastDDS transport config is separate, in `src/dockerfiles/config/fastdds_profile.xml`.
 
 ## Environment Variables and Configuration
 
-Key environment variables set in Docker Compose:
-- `DRONE_ID`: Unique identifier for each drone
-- `ROS_DOMAIN_ID`: ROS2 domain for network isolation
-- `SITL_PORT`: ArduPilot SITL communication port
-- `MAVLINK_PORT`: Ground station connection port
+Key environment variables passed by `start_swarm.sh` / `compose.yaml` to each instance:
+- `INSTANCE`: 0-indexed drone identifier (drives all per-drone port/ID math)
+- `NUM_DRONES`: total swarm size
+- `SYSID_THISMAV`: MAVLink system ID (`INSTANCE + 1`)
+- `ROS_DOMAIN_ID`: ROS2 domain for network isolation (`INSTANCE + 1`)
+- `MICRO_ROS_AGENT_PORT`: DDS agent UDP port (`2019 + INSTANCE`)
+- `RMW_IMPLEMENTATION`: DDS middleware (`rmw_fastrtps_cpp`)
+
+Port values like SITL/MAVLink/Gazebo are **computed inside `start_drone_container.sh`**
+from `INSTANCE`, not passed as environment variables.
 
 ## Dependencies and Requirements
 

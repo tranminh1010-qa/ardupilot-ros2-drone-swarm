@@ -1,6 +1,6 @@
 import numpy as np
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
+# matplotlib is only needed by plot_waypoints (dev visualization); import it
+# lazily there so flight code never depends on a working matplotlib install.
 
 def generate_circular_waypoints():
     radius = 30.0
@@ -119,8 +119,56 @@ def split_by_grid(waypoints, num_drones, grid_dims=None):
     return drone_waypoints
 
 
+def serpentine_order(waypoints):
+    """Order grid waypoints into a boustrophedon (lawnmower) sweep:
+    rows sorted by y, x-direction alternating per row. Consecutive points are
+    always adjacent grid cells, which is the standard pattern for aerial
+    mapping (uniform ground/camera coverage, minimal turn overhead)."""
+    rows = {}
+    for wp in waypoints:
+        rows.setdefault(round(wp[1], 6), []).append(wp)
+
+    ordered = []
+    for row_idx, y in enumerate(sorted(rows)):
+        row = sorted(rows[y], key=lambda w: w[0], reverse=(row_idx % 2 == 1))
+        ordered.extend(row)
+    return ordered
+
+
+def split_serpentine(waypoints, num_drones):
+    """Split the field into exactly `num_drones` balanced 1/n shares.
+
+    The waypoints are ordered as one serpentine sweep and cut into
+    `num_drones` CONTIGUOUS segments whose sizes differ by at most one
+    (⌈N/n⌉ or ⌊N/n⌋). Guarantees, for ANY drone count:
+      - every waypoint is assigned (no silent coverage holes),
+      - each drone's share is a contiguous strip it can sweep efficiently,
+      - the returned list always has exactly `num_drones` entries so
+        `chunks[i]` is safe for every drone (extras get empty lists).
+
+    This replaces split_by_grid, whose ceil(sqrt(n))² cell binning both
+    unbalanced the shares (9/6/6/4 for n=4) and silently DROPPED waypoints
+    whenever n was not a perfect square (40%+ of the field for n=2/5/6).
+    """
+    if num_drones < 1:
+        raise ValueError(f"num_drones must be >= 1, got {num_drones}")
+
+    ordered = serpentine_order(waypoints)
+
+    base, extra = divmod(len(ordered), num_drones)
+    chunks = []
+    start = 0
+    for i in range(num_drones):
+        size = base + (1 if i < extra else 0)
+        chunks.append(ordered[start:start + size])
+        start += size
+    return chunks
+
+
 def plot_waypoints(waypoints_list, title):
     """Plot the waypoints for visualization"""
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 (3d projection)
     fig = plt.figure(figsize=(10, 8))
     ax = fig.add_subplot(111, projection='3d')
 

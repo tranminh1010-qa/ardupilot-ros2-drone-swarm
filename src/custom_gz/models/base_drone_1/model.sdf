@@ -1,6 +1,6 @@
 <?xml version='1.0'?>
 <sdf version="1.9">
-  <model name="drone1">
+  <model name="drone2">
     <include>
       <uri>model://iris_with_standoffs</uri>
     </include>
@@ -170,7 +170,7 @@
       filename="ArduPilotPlugin">
       <!-- Port settings -->
       <fdm_addr>0.0.0.0</fdm_addr>
-      <fdm_port_in>9002</fdm_port_in>
+      <fdm_port_in>9012</fdm_port_in>
       <connectionTimeoutMaxCount>5</connectionTimeoutMaxCount>
       <lock_step>1</lock_step>
       <have_32_channels>0</have_32_channels>
@@ -265,7 +265,7 @@
     </plugin>
 
     <!-- Down-facing mapping camera: streams H.264/RTP via GstCameraPlugin to
-         udp://127.0.0.1:5600 (5600 + instance). Consumed by the OpenCV
+         udp://127.0.0.1:5601 (5600 + instance). Consumed by the OpenCV
          capture pipeline in swarm_control (camera_processor.py); port 5600
          doubles as QGroundControl's default video port. -->
     <link name="camera_link">
@@ -294,7 +294,7 @@
         <visualize>0</visualize>
         <plugin name="GstCameraPlugin" filename="GstCameraPlugin">
           <udp_host>127.0.0.1</udp_host>
-          <udp_port>5600</udp_port>
+          <udp_port>5601</udp_port>
           <use_basic_pipeline>true</use_basic_pipeline>
           <use_cuda>false</use_cuda>
         </plugin>

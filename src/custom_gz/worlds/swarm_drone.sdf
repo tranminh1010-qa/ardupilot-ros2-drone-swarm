@@ -335,69 +335,36 @@
       </link>
     </model>
 
-    <!-- Drone positions in the center of the world -->
-    <!-- Drone 1 -->
+    <!-- Drone positions in the center of the world.
+         Each drone uses a dedicated model variant with its FDM port baked in
+         (fdm_port_in = 9002 + 10*instance), because per-include plugin/port
+         overrides are not supported by SDF <include>. -->
+    <!-- Drone 1 : instance 0, FDM 9002 -->
     <include>
       <uri>model://base_drone</uri>
       <name>drone1</name>
-      <pose degrees="true">45 50 5 0 0 0</pose>
-      <link name="base_link">
-        <sensor name="gps" type="gps">
-          <always_on>1</always_on>
-          <update_rate>10</update_rate>
-        </sensor>
-      </link>
-     <plugin name="model_parameters" filename="libset_parameters.so">
-      <fdm_port_in>9002</fdm_port_in>
-    </plugin>
+      <pose degrees="true">45 50 0.2 0 0 0</pose>
     </include>
 
-    <!-- Drone 2 -->
+    <!-- Drone 2 : instance 1, FDM 9012 -->
     <include>
-       <uri>model://base_drone</uri>
+      <uri>model://base_drone_1</uri>
       <name>drone2</name>
-      <pose degrees="true">50 50 5 0 0 0</pose>
-      <link name="base_link">
-        <sensor name="gps" type="gps">
-          <always_on>1</always_on>
-          <update_rate>10</update_rate>
-        </sensor>
-      </link>
-      <plugin name="model_parameters" filename="libset_parameters.so">
-        <fdm_port_in>9012</fdm_port_in>
-      </plugin>
+      <pose degrees="true">50 50 0.2 0 0 0</pose>
     </include>
 
-    <!-- Drone 3 -->
+    <!-- Drone 3 : instance 2, FDM 9022 -->
     <include>
-       <uri>model://base_drone</uri>
+      <uri>model://base_drone_2</uri>
       <name>drone3</name>
-      <pose degrees="true">55 50 5 0 0 0</pose>
-      <link name="base_link">
-        <sensor name="gps" type="gps">
-          <always_on>1</always_on>
-          <update_rate>10</update_rate>
-        </sensor>
-      </link>
-      <plugin name="model_parameters" filename="libset_parameters.so">
-       <fdm_port_in>9022</fdm_port_in>
-     </plugin>
+      <pose degrees="true">55 50 0.2 0 0 0</pose>
     </include>
 
-    <!-- Drone 4 -->
+    <!-- Drone 4 : instance 3, FDM 9032 -->
     <include>
-       <uri>model://base_drone</uri>
+      <uri>model://base_drone_3</uri>
       <name>drone4</name>
-      <pose degrees="true">60 50 5 0 0 0</pose>
-      <link name="base_link">
-        <sensor name="gps" type="gps">
-          <always_on>1</always_on>
-          <update_rate>10</update_rate>
-        </sensor>
-      </link>
-        <plugin name="model_parameters" filename="libset_parameters.so">
-       <fdm_port_in>9032</fdm_port_in>
-     </plugin>
+      <pose degrees="true">60 50 0.2 0 0 0</pose>
     </include>
 
   </world>

@@ -81,13 +81,31 @@ class BaseDrone(Node):
         self.declare_parameter("pose_topic", "/ap/pose/filtered")
         self.declare_parameter("global_position_topic", "/ap/cmd_gps_pose")
         self.declare_parameter("takeoff_topic", "/ap/experimental/takeoff")
-        
+        # Shared field origin: all drones convert their local waypoints with
+        # ONE common reference so the chunks tile a single field. Without it
+        # each drone centres the field on its own home (homes are offset ~5 m
+        # per instance), skewing the tiles. (0, 0) means "not set" and falls
+        # back to the per-drone GPS origin.
+        self.declare_parameter('field_origin_lat', 0.0)
+        self.declare_parameter('field_origin_lon', 0.0)
+        # UDP port of this drone's GstCameraPlugin H.264 stream (0 = no camera)
+        self.declare_parameter('camera_port', 0)
+
         # Then get parameter values
         self.drone_id = self.get_parameter('drone_id').get_parameter_value().integer_value
         self._arm_topic = self.get_parameter("arm_topic").get_parameter_value().string_value
         self._mode_topic = self.get_parameter("mode_topic").get_parameter_value().string_value
         self._global_pos_topic = self.get_parameter("global_position_topic").get_parameter_value().string_value
         self._pose_topic = self.get_parameter("pose_topic").get_parameter_value().string_value
+        self.camera_port = self.get_parameter('camera_port').get_parameter_value().integer_value
+
+        field_lat = self.get_parameter('field_origin_lat').get_parameter_value().double_value
+        field_lon = self.get_parameter('field_origin_lon').get_parameter_value().double_value
+        self._fixed_origin = abs(field_lat) > 1e-6 or abs(field_lon) > 1e-6
+        if self._fixed_origin:
+            self.setup_coordinate_transformer(field_lat, field_lon)
+            self.get_logger().info(
+                f"Using shared field origin: lat={field_lat:.8f}, lon={field_lon:.8f}")
 
     def _setup_subscriptions(self):
         """Set up subscriptions """
@@ -124,7 +142,7 @@ class BaseDrone(Node):
         rclpy.spin_until_future_complete(self, future)
         return future.result()
 
-    @TimeoutRetry(timeout_sec=20.0, retry_interval=2.0,
+    @TimeoutRetry(timeout_sec=60.0, retry_interval=2.0,
                   success_check_factory=lambda: lambda pos: pos is not None)
     def wait_for_position_estimate(self):
         """Wait for position with automatic retry"""
@@ -161,7 +179,7 @@ class BaseDrone(Node):
         except Exception as e:
             self.get_logger().error(f'Arm service call failed: {e}')
 
-    @TimeoutRetry(timeout_sec=10.0, retry_interval=1.0,
+    @TimeoutRetry(timeout_sec=60.0, retry_interval=2.0,
                   success_check_factory=mode_success_check_factory)
     def switch_mode(self, mode: FlightMode):
         req = ModeSwitch.Request()
@@ -181,26 +199,37 @@ class BaseDrone(Node):
         """Capture the GPS origin (home position) when it's set - implementation"""
         lat = msg.position.latitude
         lon = msg.position.longitude
-        if self.home_lat is None or self.home_lon is None or self.home_lat != lat or self.home_lon != lon:
-            self.home_lon = lon
+
+        # ArduPilot publishes (0, 0) on this topic until the EKF origin is
+        # actually set. Building the transformer from that sentinel centres all
+        # waypoints on Null Island, so ignore it and wait for a real origin.
+        if abs(lat) < 1e-6 and abs(lon) < 1e-6:
+            return
+
+        if self.home_lat != lat or self.home_lon != lon:
             self.home_lat = lat
+            self.home_lon = lon
             self.home_alt = msg.position.altitude
 
-        if self.transformer is None:
-            # Initialize the coordinate transformer
-            self.setup_coordinate_transformer()
+            # (Re)build the transformer whenever the origin changes — the first
+            # valid origin may arrive after an earlier bogus one. When a shared
+            # field origin was configured, the transformer is already fixed on
+            # it and must not be re-centred on this drone's own home.
+            if not self._fixed_origin:
+                self.setup_coordinate_transformer(self.home_lat, self.home_lon)
 
             self.get_logger().info(
                 f"Home position set: lat={self.home_lat:.8f}, "
                 f"lon={self.home_lon:.8f}, alt={self.home_alt:.2f}"
             )
 
-    def setup_coordinate_transformer(self):
-        """Set up pyproj transformer for local to global conversions"""
-        # Create a local tangent plane projection centered at home
+    def setup_coordinate_transformer(self, lat_0, lon_0):
+        """Set up pyproj transformer for local to global conversions,
+        centred on (lat_0, lon_0)."""
+        # Create a local tangent plane projection centered at the origin
         # Using Transverse Mercator projection
         proj_string = (
-            f"+proj=tmerc +lat_0={self.home_lat} +lon_0={self.home_lon} "
+            f"+proj=tmerc +lat_0={lat_0} +lon_0={lon_0} "
             f"+k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs"
         )
         self.transformer = Transformer.from_crs(
