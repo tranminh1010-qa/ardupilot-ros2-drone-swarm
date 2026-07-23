@@ -64,9 +64,11 @@ def generate_launch_description():
                 wp_json = json.dumps(wp)
                 # Create drone node - connects to existing SITL instance
 
+                # CameraDrone = BaseDrone extension with the mapping camera;
+                # switch back to base_drone_dds.py to fly camera-less.
                 drone_node = Node(
                     package='swarm_control',
-                    executable='base_drone_dds.py',
+                    executable='camera_drone_dds.py',
                     name=f'drone{drone_id}',
                     output='screen',
                     # Self-heal against EKF/GPS warmup races: a node that crashes

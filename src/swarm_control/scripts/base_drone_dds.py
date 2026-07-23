@@ -88,16 +88,12 @@ class BaseDrone(Node):
         # back to the per-drone GPS origin.
         self.declare_parameter('field_origin_lat', 0.0)
         self.declare_parameter('field_origin_lon', 0.0)
-        # UDP port of this drone's GstCameraPlugin H.264 stream (0 = no camera)
-        self.declare_parameter('camera_port', 0)
-
         # Then get parameter values
         self.drone_id = self.get_parameter('drone_id').get_parameter_value().integer_value
         self._arm_topic = self.get_parameter("arm_topic").get_parameter_value().string_value
         self._mode_topic = self.get_parameter("mode_topic").get_parameter_value().string_value
         self._global_pos_topic = self.get_parameter("global_position_topic").get_parameter_value().string_value
         self._pose_topic = self.get_parameter("pose_topic").get_parameter_value().string_value
-        self.camera_port = self.get_parameter('camera_port').get_parameter_value().integer_value
 
         field_lat = self.get_parameter('field_origin_lat').get_parameter_value().double_value
         field_lon = self.get_parameter('field_origin_lon').get_parameter_value().double_value
@@ -250,6 +246,12 @@ class BaseDrone(Node):
         lon, lat = self.transformer.transform(y, x)
         return lat, lon
 
+    def on_waypoint_reached(self, wp_index, lat, lon, alt):
+        """Extension hook, called after the dwell at each waypoint.
+        No-op in the base drone; subclasses (e.g. CameraDrone in
+        camera_drone_dds.py) override it to add per-waypoint behaviour."""
+        pass
+
     def start_mission(self):
         """Start waypoint mission using DDS"""
         self.get_logger().info(f"Starting mission for drone {self.drone_id}")
@@ -271,6 +273,8 @@ class BaseDrone(Node):
             rclpy.spin_once(self)
             self.get_logger().info(f"Drone {self.drone_id} heading to waypoint {i + 1}: {lat, lon, wp[2]}")
             time.sleep(10)  # Wait between waypoints
+            # Arrived (open-loop dwell): extension hook for subclasses.
+            self.on_waypoint_reached(i + 1, lat, lon, wp[2])
 
         self.get_logger().info("Mission complete, returning to launch")
         self.state = DroneState.RETURNING
@@ -308,10 +312,11 @@ class BaseDrone(Node):
                 self.waypoints = generate_circular_waypoints()
 
 
-def main(args=None):
+def main(args=None, node_class=BaseDrone):
     rclpy.init(args=args)
-    # Start the node with default parameter
-    node = BaseDrone('base_drone_dds')
+    # Start the node with default parameter (node_class lets extensions such
+    # as CameraDrone reuse this arm/takeoff/mission sequence unchanged)
+    node = node_class('base_drone_dds')
 
     # Block till armed, which will wait for EKF3 to initialize
     if not node.arm():

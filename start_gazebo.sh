@@ -21,6 +21,25 @@ export GZ_SIM_RESOURCE_PATH="${REPO_DIR}/src/custom_gz/models:${REPO_DIR}/src/cu
 
 WORLD="${REPO_DIR}/src/custom_gz/worlds/swarm_drone.sdf"
 
+# GstCameraPlugin does not stream until it receives a Boolean(true) on its
+# <image_topic>/enable_streaming topic. Enable every drone camera once the
+# world is up (runs in the background while gz sim starts).
+(
+    for _try in $(seq 1 60); do
+        topics=$(gz topic -l 2>/dev/null | grep "down_camera/image/enable_streaming" || true)
+        if [ -n "${topics}" ]; then
+            sleep 2   # let the plugins finish subscribing
+            for t in ${topics}; do
+                gz topic -t "$t" -m gz.msgs.Boolean -p "data: true" >/dev/null 2>&1
+            done
+            echo "camera streams enabled: $(echo "${topics}" | wc -l)"
+            exit 0
+        fi
+        sleep 2
+    done
+    echo "WARNING: camera enable_streaming topics never appeared" >&2
+) &
+
 if [ "$1" = "--headless" ]; then
     exec gz sim -s -r -v2 "${WORLD}"
 else

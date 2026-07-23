@@ -49,6 +49,35 @@ Gotcha: QGroundControl's virtual joystick (`virtualJoystick=true` in
 `~/.config/QGroundControl/QGroundControl.ini`) streams centered throttle to its active
 vehicle, which then fails arming with "Throttle too high". Keep it disabled.
 
+### Camera Mapping Pipeline (OpenCV)
+Each drone flies a balanced 1/n serpentine strip of the field
+(`split_serpentine` in `points_distributor.py` — exactly n contiguous chunks,
+sizes differ by ≤1, nothing dropped; the old `split_by_grid` was unbalanced and
+silently dropped waypoints for non-square drone counts). All drones share one
+field origin (`field_origin_lat/lon` params, set in the launch file — must match
+`LAT_BASE/LON_BASE` in `start_drone_container.sh`) so the strips tile a single
+field instead of shifting with each drone's home.
+
+The camera is an **extension**, at both layers:
+- Models: `base_drone_cam{,_1,_2,_3}` wrap the plain `base_drone*` models
+  (iris_with_gimbal pattern: `<include>` + fixed joint) and add a down-facing
+  camera streaming H.264/RTP via GstCameraPlugin on UDP `5600 + instance`.
+  The world references the `_cam` wrappers; swap back to `base_drone*` to fly
+  camera-less. GstCameraPlugin only streams after a Boolean(true) on its
+  `.../image/enable_streaming` gz topic — `start_gazebo.sh` does this
+  automatically.
+- Nodes: `camera_drone_dds.py` defines `CameraDrone(BaseDrone)` which overrides
+  the `on_waypoint_reached` hook to capture a geotagged frame (+ ArUco
+  detection) per waypoint into `/root/logs/drone_<id>/` (host: `./logs`).
+  `BaseDrone` stays camera-free; camera failures never break the mission.
+  The capture uses OpenCV's GStreamer backend — the container needs Ubuntu's
+  `python3-opencv` (pip's opencv-python lacks GStreamer).
+
+After a mission, build the field mosaic on the host:
+```bash
+python3 src/scripts/stitch_field_map.py --logs ./logs --out field_map.jpg
+```
+
 ### Stopping the Swarm
 ```bash
 ./stop_swarm.sh

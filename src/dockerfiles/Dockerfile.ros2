@@ -49,6 +49,18 @@ RUN wget https://raw.githubusercontent.com/mavlink/mavros/ros2/mavros/scripts/in
     /tmp/install_geographiclib_datasets.sh && \
     rm /tmp/install_geographiclib_datasets.sh
 
+# OpenCV + GStreamer for the drone camera pipeline: Ubuntu's python3-opencv is
+# built WITH GStreamer support (pip's opencv-python is not), which
+# camera_processor.py needs to decode the GstCameraPlugin H.264/RTP streams.
+RUN apt-get update && apt-get install -y \
+    python3-opencv \
+    gstreamer1.0-tools \
+    gstreamer1.0-plugins-base \
+    gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad \
+    gstreamer1.0-libav \
+    && rm -rf /var/lib/apt/lists/*
+
 # Fix NumPy compatibility issue and install Python packages
 RUN pip3 install --no-cache-dir \
     "numpy<2.0" \

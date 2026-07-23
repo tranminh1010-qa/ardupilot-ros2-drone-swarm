@@ -1,0 +1,54 @@
+<?xml version='1.0'?>
+<sdf version="1.9">
+  <!-- Camera extension of base_drone_1: wraps the plain drone model and mounts a
+       down-facing mapping camera, following the iris_with_gimbal pattern.
+       The base drone (FDM port, rotors, ArduPilotPlugin) is untouched; swap
+       model://base_drone_cam_1 for model://base_drone_1 in the world to fly camera-less. -->
+  <model name="drone2_cam">
+    <include>
+      <uri>model://base_drone_1</uri>
+      <name>drone</name>
+    </include>
+
+    <!-- Streams H.264/RTP via GstCameraPlugin to udp://127.0.0.1:5601
+         (5600 + instance). Consumed by camera_drone_dds.py; port 5600 doubles
+         as QGroundControl's default video port. -->
+    <link name="camera_link">
+      <pose degrees="true">0 0 -0.05 0 90 0</pose>
+      <inertial>
+        <mass>0.01</mass>
+        <inertia>
+          <ixx>1e-6</ixx><iyy>1e-6</iyy><izz>1e-6</izz>
+          <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz>
+        </inertia>
+      </inertial>
+      <sensor name="down_camera" type="camera">
+        <camera>
+          <horizontal_fov>1.2</horizontal_fov>
+          <image>
+            <width>640</width>
+            <height>480</height>
+          </image>
+          <clip>
+            <near>0.1</near>
+            <far>1000</far>
+          </clip>
+        </camera>
+        <always_on>1</always_on>
+        <update_rate>10</update_rate>
+        <visualize>0</visualize>
+        <plugin name="GstCameraPlugin" filename="GstCameraPlugin">
+          <udp_host>127.0.0.1</udp_host>
+          <udp_port>5601</udp_port>
+          <use_basic_pipeline>true</use_basic_pipeline>
+          <use_cuda>false</use_cuda>
+        </plugin>
+      </sensor>
+    </link>
+
+    <joint name="camera_mount" type="fixed">
+      <parent>drone::iris_with_standoffs::base_link</parent>
+      <child>camera_link</child>
+    </joint>
+  </model>
+</sdf>
