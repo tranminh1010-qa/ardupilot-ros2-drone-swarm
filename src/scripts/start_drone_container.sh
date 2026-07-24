@@ -17,10 +17,19 @@ SYSID_THISMAV=${SYSID_THISMAV:-$((INSTANCE+1))}
 ROS_DOMAIN_ID=$((INSTANCE+1))
 MICRO_ROS_AGENT_PORT=$((2019+INSTANCE))
 
-# Offset calculation (approximately 5 meters between drones)
-# 0.000045 degrees ≈ 5 meters
-LAT_OFFSET=$(awk -v base=40.072842 -v inst="$INSTANCE" 'BEGIN{printf "%.6f", base + (inst * 0.000045)}')
-LON_OFFSET=$(awk -v base=-105.230575 -v inst="$INSTANCE" 'BEGIN{printf "%.6f", base + (inst * 0.000045)}')
+# Home position. Built-in SITL physics: offset each drone ~5 m so the
+# simulated airframes don't stack (0.000045 deg ~= 5 m).
+# Gazebo mode: NO offsets — physical separation comes from the world spawn
+# poses, and SITL reports GPS = home + world position. Per-instance home
+# offsets would make the same world point read different GPS on different
+# drones (up to ~25 m for instance 5), skewing detections and spray targets.
+if [ "${USE_GAZEBO:-0}" = "1" ]; then
+    LAT_OFFSET=40.072842
+    LON_OFFSET=-105.230575
+else
+    LAT_OFFSET=$(awk -v base=40.072842 -v inst="$INSTANCE" 'BEGIN{printf "%.6f", base + (inst * 0.000045)}')
+    LON_OFFSET=$(awk -v base=-105.230575 -v inst="$INSTANCE" 'BEGIN{printf "%.6f", base + (inst * 0.000045)}')
+fi
 
 # Calculated ports
 MAVLINK_TCP_PORT=$((5760 + 10 * INSTANCE))
@@ -44,6 +53,13 @@ cat /config/dds_swarm.parm >> instance_dds.parm
 # FRAME_TYPE 0 (plus) would break motor mixing and the drones never lift off.
 if [ "${USE_GAZEBO:-0}" = "1" ]; then
     cat /root/ardu_ws/src/ardupilot/Tools/autotest/default_params/gazebo-iris.parm >> instance_dds.parm
+fi
+
+# Sprayer role: enable ArduPilot's AC_Sprayer (pump/spinner outputs, speed-
+# proportional flow). Appended last so it wins over earlier defaults.
+if [ "${DRONE_ROLE:-mapper}" = "sprayer" ] && [ -f /config/sprayer.parm ]; then
+    echo "Instance ${INSTANCE}: sprayer role - applying sprayer.parm"
+    cat /config/sprayer.parm >> instance_dds.parm
 fi
 cat instance_dds.parm
 

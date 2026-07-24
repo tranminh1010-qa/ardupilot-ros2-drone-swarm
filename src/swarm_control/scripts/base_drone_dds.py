@@ -252,6 +252,12 @@ class BaseDrone(Node):
         camera_drone_dds.py) override it to add per-waypoint behaviour."""
         pass
 
+    def prepare_mission(self):
+        """Extension hook, called on the ground BEFORE arming. No-op in the
+        base drone; SprayerDrone overrides it to wait for and load its
+        prescription plan."""
+        pass
+
     def start_mission(self):
         """Start waypoint mission using DDS"""
         self.get_logger().info(f"Starting mission for drone {self.drone_id}")
@@ -290,10 +296,14 @@ class BaseDrone(Node):
         msg.header.frame_id = "map"
         msg.coordinate_frame = 6  # MAV_FRAME_GLOBAL_RELATIVE_ALT_INT
 
-        # Convert to integers as expected by INT frames
-        msg.latitude = float(lat * 1e7)  # Convert to float32 (degrees * 1e7)
-        msg.longitude = float(lon * 1e7)  # Convert to float32 (degrees * 1e7)
-        msg.altitude = float(alt * 1000)  # Convert to millimeters (relative to home)
+        # ArduPilot's DDS handler (AP_DDS_ExternalControl.cpp) expects lat/lon
+        # in DEGREES and altitude in METERS — it scales to degE7/cm itself
+        # (Location(lat * 1E7, ...), alt * 100). Pre-scaling here caused int32
+        # overflow in the firmware and sent the drones marching kilometres off
+        # the field chasing wrapped garbage targets.
+        msg.latitude = float(lat)    # degrees
+        msg.longitude = float(lon)   # degrees
+        msg.altitude = float(alt)    # metres (frame 6: relative to home)
 
         self._global_pos_pub.publish(msg)
 
@@ -317,6 +327,10 @@ def main(args=None, node_class=BaseDrone):
     # Start the node with default parameter (node_class lets extensions such
     # as CameraDrone reuse this arm/takeoff/mission sequence unchanged)
     node = node_class('base_drone_dds')
+
+    # Pre-arm extension hook: runs ON THE GROUND before arming. SprayerDrone
+    # uses it to wait for its prescription plan; no-op in the base drone.
+    node.prepare_mission()
 
     # Block till armed, which will wait for EKF3 to initialize
     if not node.arm():

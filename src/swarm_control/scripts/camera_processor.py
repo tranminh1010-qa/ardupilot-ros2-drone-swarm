@@ -4,7 +4,8 @@
 Each drone model streams H.264/RTP over UDP via GstCameraPlugin on port
 5600 + instance (see src/custom_gz/models/base_drone*/model.sdf). This module
 decodes that stream with OpenCV's GStreamer backend and provides
-waypoint-triggered, geotagged frame capture plus ArUco marker detection.
+waypoint-triggered, geotagged frame capture plus ArUco marker detection and
+weed detection.
 
 Design constraints:
  - MUST be non-fatal: a missing camera, cv2, or GStreamer support must never
@@ -14,6 +15,7 @@ Design constraints:
    host-side mosaic script can place them on the field map.
 """
 import json
+import math
 import os
 import threading
 import time
@@ -24,6 +26,14 @@ try:
 except ImportError:  # pragma: no cover - depends on container image
     cv2 = None
     _CV2_OK = False
+
+# Weed detection: the sim's weeds (model weed_field) are pure magenta blobs,
+# so a tight HSV band + area filter is a reliable detector. Camera intrinsics
+# from base_drone_cam/model.sdf, used for nadir georeferencing.
+CAMERA_HFOV_RAD = 1.2
+WEED_HSV_LOW = (140, 100, 80)
+WEED_HSV_HIGH = (170, 255, 255)
+WEED_MIN_AREA_PX = 50
 
 
 class CameraProcessor:
@@ -119,6 +129,7 @@ class CameraProcessor:
             return None
 
         detections = self._detect_aruco(frame)
+        weeds = self._detect_weeds(frame, lat=lat, lon=lon, alt=alt)
 
         img_path = os.path.join(self.out_dir, f"wp_{wp_index:03d}.jpg")
         cv2.imwrite(img_path, frame)
@@ -131,6 +142,7 @@ class CameraProcessor:
             "alt": alt,
             "unix_time": time.time(),
             "aruco_detections": detections,
+            "weed_detections": weeds,
         }
         if extra:
             meta.update(extra)
@@ -139,7 +151,8 @@ class CameraProcessor:
 
         self._info(
             f"wp {wp_index}: saved {os.path.basename(img_path)}"
-            + (f" ({len(detections)} aruco)" if detections else ""))
+            + (f" ({len(detections)} aruco)" if detections else "")
+            + (f" ({len(weeds)} weeds)" if weeds else ""))
         return img_path
 
     def _detect_aruco(self, frame):
@@ -160,6 +173,48 @@ class CameraProcessor:
             {"id": int(i[0]), "corners": c.reshape(-1, 2).tolist()}
             for i, c in zip(ids, corners)
         ]
+
+    def _detect_weeds(self, frame, lat=None, lon=None, alt=None):
+        """Detect magenta weed blobs; returns [{'centroid_px', 'bbox',
+        'area_px', 'lat', 'lon'}]. lat/lon are georeferenced from the drone
+        pose assuming a north-aligned nadir camera (approximate — vehicle yaw
+        is not compensated), or None when the pose is unknown."""
+        try:
+            hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+            mask = cv2.inRange(hsv, WEED_HSV_LOW, WEED_HSV_HIGH)
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+            mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+            contours, _ = cv2.findContours(
+                mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+            h, w = frame.shape[:2]
+            f_px = (w / 2.0) / math.tan(CAMERA_HFOV_RAD / 2.0)
+            detections = []
+            for c in contours:
+                area = cv2.contourArea(c)
+                if area < WEED_MIN_AREA_PX:
+                    continue
+                bx, by, bw, bh = cv2.boundingRect(c)
+                cx = bx + bw / 2.0
+                cy = by + bh / 2.0
+                det = {
+                    "centroid_px": [cx, cy],
+                    "bbox": [bx, by, bw, bh],
+                    "area_px": area,
+                    "lat": None,
+                    "lon": None,
+                }
+                if lat is not None and lon is not None and alt is not None:
+                    east = (cx - w / 2.0) / f_px * alt
+                    north = -(cy - h / 2.0) / f_px * alt
+                    det["lat"] = lat + north / 111111.0
+                    det["lon"] = lon + east / (
+                        111111.0 * math.cos(math.radians(lat)))
+                detections.append(det)
+            return detections
+        except Exception:
+            return []
 
     # ---------------------------------------------------------------- close
     def close(self):

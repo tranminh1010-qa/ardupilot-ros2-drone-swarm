@@ -1,0 +1,32 @@
+# ArduPilot AC_Sprayer configuration for the spraying-drone role.
+# Appended to the instance param file when the SITL container boots with
+# DRONE_ROLE=sprayer (see src/scripts/start_drone_container.sh).
+#
+# Sized to a DJI Agras T25-class platform:
+#   20 L tank, 16 L/min max flow, 4-7 m swath, spray speed ~5 m/s.
+# Pump output is speed-proportional: PUMP_RATE is the pump % at 1 m/s, so at
+# the 5 m/s spray speed the pump reaches 100% (= 16 L/min full flow).
+
+# Enable the sprayer library (sub-parameters appear once enabled)
+SPRAY_ENABLE 1
+
+# Pump % when travelling at 1 m/s (speed-proportional variable rate)
+SPRAY_PUMP_RATE 20
+
+# Minimum ground speed before spraying starts (cm/s) - no puddling at hover
+SPRAY_SPEED_MIN 100
+
+# Minimum pump % while the sprayer is active
+SPRAY_PUMP_MIN 0
+
+# Spinner PWM while spraying (disperses spray horizontally)
+SPRAY_SPINNER 1300
+
+# Outputs: pump on SERVO9 (function 22), spinner on SERVO10 (function 23).
+# Motors occupy SERVO1-4; 9/10 are free on the simulated airframe.
+SERVO9_FUNCTION 22
+SERVO10_FUNCTION 23
+
+# RC9 toggles the sprayer (aux function 15: <1200 off, >1800 on). The control
+# node turns spraying on/off by overriding RC9 via MAVLink or DO_AUX_FUNCTION.
+RC9_OPTION 15

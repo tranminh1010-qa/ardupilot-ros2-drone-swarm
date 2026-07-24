@@ -26,6 +26,9 @@
     <plugin filename="gz-sim-navsat-system"
       name="gz::sim::systems::NavSat">
     </plugin>
+    <plugin filename="gz-sim-particle-emitter-system"
+      name="gz::sim::systems::ParticleEmitter">
+    </plugin>
 
     <scene>
       <ambient>0.85 0.85 0.85</ambient>
@@ -434,9 +437,10 @@
       <pose degrees="true">55 50 0.2 0 0 0</pose>
     </include>
 
-    <!-- Drone 4 : instance 3, FDM 9032 -->
+    <!-- Drone 4 : instance 3, FDM 9032 — SPRAYER (AC_Sprayer enabled via
+         DRONE_ROLE=sprayer / sprayer.parm; spray plume on /sprayer/3/spray_cmd) -->
     <include>
-      <uri>model://base_drone_cam_3</uri>
+      <uri>model://base_drone_sprayer_3</uri>
       <name>drone4</name>
       <pose degrees="true">60 50 0.2 0 0 0</pose>
     </include>
