@@ -73,6 +73,16 @@ The camera is an **extension**, at both layers:
   The capture uses OpenCV's GStreamer backend — the container needs Ubuntu's
   `python3-opencv` (pip's opencv-python lacks GStreamer).
 
+Simulated weeds: `src/custom_gz/worlds/generate_weeds.py` generates
+`models/weed_field` — oversized magenta visual-only blobs over the surveyed
+80×80 m area (seeded; ground truth lat/lon in
+`models/weed_field/ground_truth.json`), included by both swarm worlds.
+`camera_processor.py` detects them per waypoint via an HSV band
+(H 140–170) + contour area filter and georeferences each detection
+(nadir approximation, yaw not compensated); results land in the sidecar
+JSON as `weed_detections`. Regenerate the layout with
+`python3 src/custom_gz/worlds/generate_weeds.py --count N --seed S`.
+
 After a mission, build the field mosaic on the host:
 ```bash
 python3 src/scripts/stitch_field_map.py --logs ./logs --out field_map.jpg
