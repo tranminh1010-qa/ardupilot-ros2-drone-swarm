@@ -92,9 +92,12 @@ video port).
 
 Gap analysis vs. the project narrative, in build order:
 
-1. **Sprayer drone** — `SprayerDrone(BaseDrone)` extension flying prescription
-   plans with simulated spray actuation, tank + battery constraints, plus a
-   `base_drone_sprayer` Gazebo variant
+1. **Sprayer drone** — ✅ model + firmware done: `base_drone_sprayer` Gazebo
+   extension (tank, boom, particle-emitter plumes on `/sprayer/spray_cmd`) and
+   ArduPilot's native `AC_Sprayer` enabled via `sprayer.parm` (T25-class rates,
+   pump servo 22, aux 15) when booted with `SPRAYER_INSTANCES="3"`. Remaining:
+   a `SprayerDrone(BaseDrone)` node flying prescription plans with tank +
+   battery constraints
 2. **On-premise processing server** — pull detection out of the drone nodes
    into a containerized microservice: ingest the RTP streams, run AI models,
    map-reduce field segments across workers, store detections in

@@ -412,37 +412,49 @@
       <pose>-45 -50 0 0 0 0</pose>
     </include>
 
-    <!-- Drone positions in the center of the world.
-         Each drone uses a dedicated model variant with its FDM port baked in
-         (fdm_port_in = 9002 + 10*instance), because per-include plugin/port
-         overrides are not supported by SDF <include>. -->
-    <!-- Drone 1 : instance 0, FDM 9002 -->
+    <!-- Mixed fleet: 2 camera mappers (instances 0-1) + 4 sprayers
+         (instances 2-5). FDM port = 9002 + 10*instance; camera stream
+         5600 + instance; spray plume topic /sprayer/<instance>/spray_cmd. -->
+    <!-- Mapper 1 : instance 0, FDM 9002, camera 5600 -->
     <include>
       <uri>model://base_drone_cam</uri>
       <name>drone1</name>
       <pose degrees="true">45 50 0.2 0 0 0</pose>
     </include>
 
-    <!-- Drone 2 : instance 1, FDM 9012 -->
+    <!-- Mapper 2 : instance 1, FDM 9012, camera 5601 -->
     <include>
       <uri>model://base_drone_cam_1</uri>
       <name>drone2</name>
       <pose degrees="true">50 50 0.2 0 0 0</pose>
     </include>
 
-    <!-- Drone 3 : instance 2, FDM 9022 -->
+    <!-- Sprayer 1 : instance 2, FDM 9022 -->
     <include>
-      <uri>model://base_drone_cam_2</uri>
+      <uri>model://base_drone_sprayer_2</uri>
       <name>drone3</name>
       <pose degrees="true">55 50 0.2 0 0 0</pose>
     </include>
 
-    <!-- Drone 4 : instance 3, FDM 9032 — SPRAYER (AC_Sprayer enabled via
-         DRONE_ROLE=sprayer / sprayer.parm; spray plume on /sprayer/3/spray_cmd) -->
+    <!-- Sprayer 2 : instance 3, FDM 9032 -->
     <include>
       <uri>model://base_drone_sprayer_3</uri>
       <name>drone4</name>
       <pose degrees="true">60 50 0.2 0 0 0</pose>
+    </include>
+
+    <!-- Sprayer 3 : instance 4, FDM 9042 -->
+    <include>
+      <uri>model://base_drone_sprayer_4</uri>
+      <name>drone5</name>
+      <pose degrees="true">65 50 0.2 0 0 0</pose>
+    </include>
+
+    <!-- Sprayer 4 : instance 5, FDM 9052 -->
+    <include>
+      <uri>model://base_drone_sprayer_5</uri>
+      <name>drone6</name>
+      <pose degrees="true">70 50 0.2 0 0 0</pose>
     </include>
 
   </world>

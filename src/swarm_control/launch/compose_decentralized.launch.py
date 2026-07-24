@@ -34,41 +34,93 @@ def generate_launch_description():
         description='ROS MiddleWare Implementation'
     )
 
+    sprayer_instances_arg = DeclareLaunchArgument(
+        'sprayer_instances',
+        default_value='',
+        description='Space-separated 0-indexed instances that fly the sprayer '
+                    'role (e.g. "2 3 4 5"); all other instances are mappers. '
+                    'Must match SPRAYER_INSTANCES given to start_swarm.sh and '
+                    'the sprayer models in the Gazebo world.'
+    )
+
     # Docker Compose environment - SITL instances are already running
     def launch_setup(context, *args, **kwargs):
         try:
             num_drones = int(context.launch_configurations['num_drones'])
             LogInfo(msg = f"Launching ROS2 Node for num_drones:{num_drones}")
             rmw_implementation = str(context.launch_configurations.get('rmw_implementation','rmw_fastrtps_cpp'))
+            sprayer_instances = {
+                int(s) for s in
+                context.launch_configurations.get('sprayer_instances', '').split()
+            }
             base_mavlink_port = 14550
             base_ros_port = 14551
 
             action_list = []
 
-            # Generate waypoints and distribute to drones: balanced serpentine
-            # split — every drone gets a contiguous 1/n strip of the sweep,
-            # sizes differ by at most one waypoint, nothing is dropped.
+            # Role split: mappers survey at 30 m with cameras, sprayers treat
+            # at 15 m with AC_Sprayer. EACH ROLE covers the whole field split
+            # 1/n among its own members (balanced serpentine strips).
+            mappers = [i for i in range(num_drones) if i not in sprayer_instances]
+            sprayers = [i for i in range(num_drones) if i in sprayer_instances]
+
             wps = generate_grid_waypoints(field_size=80.0, grid_points=5, height=30.0)
-            chunks = split_serpentine(wps, num_drones)
-            action_list.append(LogInfo(msg=f"Generated {len(wps)} waypoints for {num_drones} drones."))
+            mapper_chunks = split_serpentine(wps, len(mappers)) if mappers else []
+            sprayer_chunks = split_serpentine(wps, len(sprayers)) if sprayers else []
+            SPRAY_ALT = 15.0
+
+            chunk_for = {}
+            for k, i in enumerate(mappers):
+                chunk_for[i] = mapper_chunks[k]
+            for k, i in enumerate(sprayers):
+                chunk_for[i] = [(x, y, SPRAY_ALT) for x, y, _ in sprayer_chunks[k]]
+
+            action_list.append(LogInfo(
+                msg=f"Fleet: {len(mappers)} mappers {mappers} + "
+                    f"{len(sprayers)} sprayers {sprayers}; "
+                    f"{len(wps)} waypoints per role."))
+
             # Create ROS nodes for each drone
             drone_nodes = []
             for i in range(num_drones):
                 drone_id = i + 1
                 instance = i
+                is_sprayer = i in sprayer_instances
                 # Each drone gets its own ROS_DOMAIN_ID (INSTANCE + 1)
                 ros_domain_id = str(drone_id)
                 mavlink_port = base_mavlink_port + (i * 10)
                 ros_port = base_ros_port + (i * 10)
-                wp = chunks[i]
-                wp_json = json.dumps(wp)
-                # Create drone node - connects to existing SITL instance
+                wp_json = json.dumps(chunk_for[i])
 
-                # CameraDrone = BaseDrone extension with the mapping camera;
-                # switch back to base_drone_dds.py to fly camera-less.
+                # Role extensions of BaseDrone: CameraDrone maps with the
+                # down-facing camera; SprayerDrone flies with AC_Sprayer on
+                # (toggled via SERIAL1 MAVLink TCP 5762 + 10*instance).
+                params = {
+                    'drone_id': drone_id,
+                    'mavlink_connection': f'udp:localhost:{ros_port}',
+                    'assigned_waypoints': wp_json,
+                    'instance': instance,
+                    'mavlink_port': mavlink_port,
+                    'ros_port': ros_port,
+                    'field_origin_lat': FIELD_ORIGIN_LAT,
+                    'field_origin_lon': FIELD_ORIGIN_LON,
+                }
+                if is_sprayer:
+                    executable = 'sprayer_drone_dds.py'
+                    params['mavlink_tcp_port'] = 5762 + 10 * instance
+                    # Targeted spraying: wait on the ground for the planner's
+                    # prescription (weed clusters from the mappers' survey);
+                    # assigned_waypoints stays as the blanket-strip fallback.
+                    params['prescription_file'] = \
+                        f'/root/logs/prescriptions/sprayer_{instance}.json'
+                    params['prescription_timeout'] = 600.0
+                else:
+                    executable = 'camera_drone_dds.py'
+                    params['camera_port'] = CAMERA_PORT_BASE + instance
+
                 drone_node = Node(
                     package='swarm_control',
-                    executable='camera_drone_dds.py',
+                    executable=executable,
                     name=f'drone{drone_id}',
                     output='screen',
                     # Self-heal against EKF/GPS warmup races: a node that crashes
@@ -77,17 +129,7 @@ def generate_launch_description():
                     # call rclpy.spin() forever, so respawn only re-runs failures.
                     respawn=True,
                     respawn_delay=5.0,
-                    parameters=[{
-                        'drone_id': drone_id,
-                        'mavlink_connection': f'udp:localhost:{ros_port}',
-                        'assigned_waypoints': wp_json,
-                        'instance': instance,
-                        'mavlink_port': mavlink_port,
-                        'ros_port': ros_port,
-                        'field_origin_lat': FIELD_ORIGIN_LAT,
-                        'field_origin_lon': FIELD_ORIGIN_LON,
-                        'camera_port': CAMERA_PORT_BASE + instance,
-                    }],
+                    parameters=[params],
                     additional_env={
                         'ROS_DOMAIN_ID': ros_domain_id,
                         'RMW_IMPLEMENTATION': rmw_implementation
@@ -108,12 +150,36 @@ def generate_launch_description():
                     )
                 )
 
+            # Prescription planner: waits for the mappers' survey, clusters
+            # the weed detections, and writes per-sprayer spray plans that the
+            # SprayerDrone nodes are polling for. File-based (shares
+            # /root/logs with the CameraDrone nodes in this container).
+            if sprayers and mappers:
+                expect = [f"{i + 1}:{len(chunk_for[i])}" for i in mappers]
+                action_list.append(ExecuteProcess(
+                    cmd=['/ros2_ws/install/swarm_control/lib/swarm_control/'
+                         'prescription_planner.py',
+                         '--logs', '/root/logs',
+                         '--sprayers', *[str(s) for s in sprayers],
+                         '--expect', *expect,
+                         '--timeout', '420',
+                         # 6 m merges duplicate detections of one weed seen
+                         # from different frames (georeferencing is nadir-
+                         # approximate, vehicle yaw uncompensated) without
+                         # merging distinct weeds (typically >10 m apart).
+                         '--cluster-radius', '6.0',
+                         '--spray-alt', str(SPRAY_ALT)],
+                    output='screen',
+                    name='prescription_planner',
+                ))
+
             return action_list
 
         except Exception as e:
             print(f"Error in launch setup: {str(e)}")
             return [LogInfo(msg=f"Error in launch setup: {str(e)}")]
 
-    launch_actions = [num_drones_arg, rmw_arg,  OpaqueFunction(function=launch_setup)]
+    launch_actions = [num_drones_arg, rmw_arg, sprayer_instances_arg,
+                      OpaqueFunction(function=launch_setup)]
 
     return LaunchDescription(launch_actions)

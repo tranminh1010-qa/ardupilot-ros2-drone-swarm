@@ -19,7 +19,10 @@ GZWS="/home/prince/Documents/projects/swarm/gz_ws/src/ardupilot_gazebo"
 export GZ_SIM_SYSTEM_PLUGIN_PATH="${GZWS}/build"
 export GZ_SIM_RESOURCE_PATH="${REPO_DIR}/src/custom_gz/models:${REPO_DIR}/src/custom_gz/worlds:${GZWS}/models:${GZWS}/worlds"
 
-WORLD="${REPO_DIR}/src/custom_gz/worlds/swarm_drone.sdf"
+# World selection: default is the 4-mapper world; set SWARM_WORLD to swap,
+# e.g. the mixed fleet (3 camera mappers + 1 sprayer with spray plumes):
+#   SWARM_WORLD=swarm_drone_spray.sdf ./start_gazebo.sh
+WORLD="${REPO_DIR}/src/custom_gz/worlds/${SWARM_WORLD:-swarm_drone.sdf}"
 
 # GstCameraPlugin does not stream until it receives a Boolean(true) on its
 # <image_topic>/enable_streaming topic. Enable every drone camera once the

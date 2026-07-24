@@ -42,6 +42,15 @@ for ((i=0; i<$NUM_DRONES; i++)); do
         --name micro-ros-agent-drone-$i \
         micro-ros-agent-drone
     
+    # Determine this instance's role: SPRAYER_INSTANCES is a space-separated
+    # list of 0-indexed instances that boot as sprayers (AC_Sprayer enabled
+    # via sprayer.parm); all others are mappers.
+    #   SPRAYER_INSTANCES="3" USE_GAZEBO=1 ./start_swarm.sh 4
+    DRONE_ROLE=mapper
+    case " ${SPRAYER_INSTANCES:-} " in
+        *" $i "*) DRONE_ROLE=sprayer ;;
+    esac
+
     # Start the drone
     # USE_GAZEBO=1 (exported before calling this script) couples SITL physics
     # to a Gazebo instance running on the host (see start_drone_container.sh).
@@ -51,6 +60,7 @@ for ((i=0; i<$NUM_DRONES; i++)); do
         -e SYSID_THISMAV=$((i+1)) \
         -e MICRO_ROS_AGENT_PORT=$((2019+i)) \
         -e USE_GAZEBO=${USE_GAZEBO:-0} \
+        -e DRONE_ROLE=$DRONE_ROLE \
         --name drone-ardu-$i \
         drone_ardu
 done

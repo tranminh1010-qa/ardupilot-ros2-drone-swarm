@@ -28,7 +28,7 @@
     </plugin>
 
     <scene>
-      <ambient>0.6 0.8 0.4</ambient>
+      <ambient>0.85 0.85 0.85</ambient>
       <background>0.7 0.9 1.0</background>
       <sky></sky>
     </scene>
@@ -43,8 +43,9 @@
 
     <light type="directional" name="sun">
       <cast_shadows>true</cast_shadows>
+      <intensity>1.6</intensity>
       <pose>0 0 10 0 0 0</pose>
-      <diffuse>0.9 0.9 0.7 1</diffuse>
+      <diffuse>1.0 1.0 0.95 1</diffuse>
       <specular>0.8 0.8 0.8 1</specular>
       <attenuation>
         <range>1000</range>
@@ -52,7 +53,7 @@
         <linear>0.01</linear>
         <quadratic>0.001</quadratic>
       </attenuation>
-      <direction>-0.5 0.1 -0.9</direction>
+      <direction>-0.3 0.2 -0.9</direction>
     </light>
 
     <!-- Ground plane -->
@@ -83,9 +84,15 @@
             </plane>
           </geometry>
           <material>
-            <ambient>0.3 0.5 0.2 1</ambient>
-            <diffuse>0.3 0.5 0.2 1</diffuse>
-            <specular>0.1 0.1 0.1 1</specular>
+            <ambient>1 1 1 1</ambient>
+            <diffuse>1 1 1 1</diffuse>
+            <specular>0.05 0.05 0.05 1</specular>
+            <pbr>
+              <metal>
+                <albedo_map>model://farm_textures/textures/grass.png</albedo_map>
+                <roughness>1.0</roughness>
+              </metal>
+            </pbr>
           </material>
         </visual>
       </link>
@@ -111,9 +118,15 @@
             </box>
           </geometry>
           <material>
-            <ambient>0.4 0.7 0.2 1</ambient>
-            <diffuse>0.4 0.7 0.2 1</diffuse>
-            <specular>0.1 0.1 0.1 1</specular>
+            <ambient>1 1 1 1</ambient>
+            <diffuse>1 1 1 1</diffuse>
+            <specular>0.05 0.05 0.05 1</specular>
+            <pbr>
+              <metal>
+                <albedo_map>model://farm_textures/textures/corn.png</albedo_map>
+                <roughness>1.0</roughness>
+              </metal>
+            </pbr>
           </material>
         </visual>
       </link>
@@ -138,9 +151,15 @@
             </box>
           </geometry>
           <material>
-            <ambient>0.2 0.6 0.3 1</ambient>
-            <diffuse>0.2 0.6 0.3 1</diffuse>
-            <specular>0.1 0.1 0.1 1</specular>
+            <ambient>1 1 1 1</ambient>
+            <diffuse>1 1 1 1</diffuse>
+            <specular>0.05 0.05 0.05 1</specular>
+            <pbr>
+              <metal>
+                <albedo_map>model://farm_textures/textures/soybean.png</albedo_map>
+                <roughness>1.0</roughness>
+              </metal>
+            </pbr>
           </material>
         </visual>
       </link>
@@ -165,9 +184,15 @@
             </box>
           </geometry>
           <material>
-            <ambient>0.9 0.8 0.2 1</ambient>
-            <diffuse>0.9 0.8 0.2 1</diffuse>
-            <specular>0.1 0.1 0.1 1</specular>
+            <ambient>1 1 1 1</ambient>
+            <diffuse>1 1 1 1</diffuse>
+            <specular>0.05 0.05 0.05 1</specular>
+            <pbr>
+              <metal>
+                <albedo_map>model://farm_textures/textures/wheat.png</albedo_map>
+                <roughness>1.0</roughness>
+              </metal>
+            </pbr>
           </material>
         </visual>
       </link>
@@ -192,9 +217,15 @@
             </box>
           </geometry>
           <material>
-            <ambient>0.7 0.7 0.5 1</ambient>
-            <diffuse>0.7 0.7 0.5 1</diffuse>
-            <specular>0.1 0.1 0.1 1</specular>
+            <ambient>1 1 1 1</ambient>
+            <diffuse>1 1 1 1</diffuse>
+            <specular>0.05 0.05 0.05 1</specular>
+            <pbr>
+              <metal>
+                <albedo_map>model://farm_textures/textures/rice.png</albedo_map>
+                <roughness>1.0</roughness>
+              </metal>
+            </pbr>
           </material>
         </visual>
       </link>
@@ -219,9 +250,15 @@
             </box>
           </geometry>
           <material>
-            <ambient>0.9 0.9 0.0 1</ambient>
-            <diffuse>0.9 0.9 0.0 1</diffuse>
-            <specular>0.1 0.1 0.1 1</specular>
+            <ambient>1 1 1 1</ambient>
+            <diffuse>1 1 1 1</diffuse>
+            <specular>0.05 0.05 0.05 1</specular>
+            <pbr>
+              <metal>
+                <albedo_map>model://farm_textures/textures/canola.png</albedo_map>
+                <roughness>1.0</roughness>
+              </metal>
+            </pbr>
           </material>
         </visual>
       </link>
@@ -246,9 +283,15 @@
             </box>
           </geometry>
           <material>
-            <ambient>0.8 0.7 0.3 1</ambient>
-            <diffuse>0.8 0.7 0.3 1</diffuse>
-            <specular>0.1 0.1 0.1 1</specular>
+            <ambient>1 1 1 1</ambient>
+            <diffuse>1 1 1 1</diffuse>
+            <specular>0.05 0.05 0.05 1</specular>
+            <pbr>
+              <metal>
+                <albedo_map>model://farm_textures/textures/barley.png</albedo_map>
+                <roughness>1.0</roughness>
+              </metal>
+            </pbr>
           </material>
         </visual>
       </link>
@@ -273,9 +316,15 @@
             </box>
           </geometry>
           <material>
-            <ambient>0.9 0.9 0.9 1</ambient>
-            <diffuse>0.9 0.9 0.9 1</diffuse>
-            <specular>0.1 0.1 0.1 1</specular>
+            <ambient>1 1 1 1</ambient>
+            <diffuse>1 1 1 1</diffuse>
+            <specular>0.05 0.05 0.05 1</specular>
+            <pbr>
+              <metal>
+                <albedo_map>model://farm_textures/textures/cotton.png</albedo_map>
+                <roughness>1.0</roughness>
+              </metal>
+            </pbr>
           </material>
         </visual>
       </link>
@@ -300,9 +349,15 @@
             </box>
           </geometry>
           <material>
-            <ambient>0.9 0.6 0.0 1</ambient>
-            <diffuse>0.9 0.6 0.0 1</diffuse>
-            <specular>0.1 0.1 0.1 1</specular>
+            <ambient>1 1 1 1</ambient>
+            <diffuse>1 1 1 1</diffuse>
+            <specular>0.05 0.05 0.05 1</specular>
+            <pbr>
+              <metal>
+                <albedo_map>model://farm_textures/textures/sunflower.png</albedo_map>
+                <roughness>1.0</roughness>
+              </metal>
+            </pbr>
           </material>
         </visual>
       </link>
@@ -327,9 +382,15 @@
             </box>
           </geometry>
           <material>
-            <ambient>0.3 0.8 0.3 1</ambient>
-            <diffuse>0.3 0.8 0.3 1</diffuse>
-            <specular>0.1 0.1 0.1 1</specular>
+            <ambient>1 1 1 1</ambient>
+            <diffuse>1 1 1 1</diffuse>
+            <specular>0.05 0.05 0.05 1</specular>
+            <pbr>
+              <metal>
+                <albedo_map>model://farm_textures/textures/alfalfa.png</albedo_map>
+                <roughness>1.0</roughness>
+              </metal>
+            </pbr>
           </material>
         </visual>
       </link>
@@ -342,7 +403,10 @@
     <include>
       <uri>model://weed_field</uri>
       <name>weed_field</name>
-      <pose>0 0 0 0 0 0</pose>
+      <!-- Shift the generator's (45,50)-centred layout onto the surveyed
+           square: world (0,0) = field GPS origin under the JSON FDM, so this
+           pose makes the visuals coincide with ground_truth.json lat/lons. -->
+      <pose>-45 -50 0 0 0 0</pose>
     </include>
 
     <!-- Drone positions in the center of the world.
