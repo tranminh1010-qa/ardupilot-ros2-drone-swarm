@@ -1,12 +1,14 @@
-# Default ignored files
-/shelf/
-/workspace.xml
-# Editor-based HTTP Client requests
-/httpRequests/
-# Datasource local storage ignored files
-/dataSources/
-/dataSources.local.xml
+build/
+install/
+log/
+**/__pycache__/
+*.pyc
+*.pyo
+*.swp
+.vscode/
 .idea/
-.claude
-/src/terrain
-/logs
+*.bag
+*.db
+*.sqlite
+docker_data/
+logs/

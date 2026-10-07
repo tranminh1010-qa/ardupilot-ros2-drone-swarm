@@ -30,8 +30,13 @@ done
 echo "=== ROS2 Topic Monitor $(date) ==="
 timeout 5 ros2 topic list 2>/dev/null | grep -E "(drone|ap)"
 
-ros2 launch swarm_control compose_decentralized.launch.py \
-    num_drones:="${NUM_DRONES}" \
-    sprayer_instances:="${SPRAYER_INSTANCES:-}"
+if [ -n "${SPRAYER_INSTANCES:-}" ]; then
+    ros2 launch swarm_control compose_decentralized.launch.py \
+        num_drones:="${NUM_DRONES}" \
+        sprayer_instances:="${SPRAYER_INSTANCES}"
+else
+    ros2 launch swarm_control compose_decentralized.launch.py \
+        num_drones:="${NUM_DRONES}"
+fi
 
 

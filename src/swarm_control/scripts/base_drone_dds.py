@@ -344,12 +344,48 @@ def main(args=None, node_class=BaseDrone):
         raise RuntimeError("Unable to switch to GUIDED mode")
 
     # Takeoff
-    takeoff_result = node.takeoff(50.0)
-    if not takeoff_result.status:
-        raise RuntimeError("Takeoff failed")
-    node.get_logger().info(f"Drone take off status: {takeoff_result.status}")
-    # Wait for takeoff completion
-    time.sleep(15)
+    airborne = False
+
+    for attempt in range(3):
+        takeoff_result = node.takeoff(50.0)
+
+        if takeoff_result and takeoff_result.status:
+            node.get_logger().info(
+                f"Takeoff command accepted (attempt {attempt + 1}/3)"
+            )
+        else:
+            node.get_logger().warning(
+                f"Takeoff command failed (attempt {attempt + 1}/3)"
+            )
+
+        deadline = time.time() + 20.0
+
+        while time.time() < deadline:
+            rclpy.spin_once(node, timeout_sec=0.2)
+
+            alt = 0.0
+            if node.current_position is not None:
+                alt = node.current_position[2]
+
+            if alt > 5.0:
+                airborne = True
+                node.get_logger().info(
+                    f"Drone {node.drone_id} airborne, altitude={alt:.2f} m"
+                )
+                break
+
+        if airborne:
+            break
+
+        node.get_logger().warning(
+            "Drone still on ground, retrying TAKEOFF..."
+        )
+        time.sleep(2.0)
+
+    if not airborne:
+        raise RuntimeError(
+            "Takeoff accepted but drone did not become airborne"
+        )
 
     node.get_logger().info(f"Drone {node.drone_id} initialized with DDS")
     node.get_logger().info(f"Drone {node.drone_id} started mission")

@@ -63,6 +63,10 @@ for ((i=0; i<$NUM_DRONES; i++)); do
         -e DRONE_ROLE=$DRONE_ROLE \
         --name drone-ardu-$i \
         drone_ardu
+    if (( i < NUM_DRONES - 1 )); then
+        echo "Waiting 15 seconds before starting next drone..."
+        sleep 15
+    fi
 done
 
 echo "Swarm started with ${NUM_DRONES} drones"

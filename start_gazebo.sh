@@ -14,7 +14,7 @@
 set -e
 
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
-GZWS="/home/prince/Documents/projects/swarm/gz_ws/src/ardupilot_gazebo"
+GZWS="/home/tran/ardupilot_gazebo"
 
 export GZ_SIM_SYSTEM_PLUGIN_PATH="${GZWS}/build"
 export GZ_SIM_RESOURCE_PATH="${REPO_DIR}/src/custom_gz/models:${REPO_DIR}/src/custom_gz/worlds:${GZWS}/models:${GZWS}/worlds"

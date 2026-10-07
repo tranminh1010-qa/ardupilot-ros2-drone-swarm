@@ -165,6 +165,65 @@ def split_serpentine(waypoints, num_drones):
     return chunks
 
 
+
+
+def split_vertical_strips(waypoints, num_drones):
+    if num_drones < 1:
+        raise ValueError(f"num_drones must be >= 1, got {num_drones}")
+
+    xs = sorted(set(round(wp[0], 6) for wp in waypoints))
+    groups = [[] for _ in range(num_drones)]
+
+    base, extra = divmod(len(xs), num_drones)
+    start_idx = 0
+
+    for i in range(num_drones):
+        size = base + (1 if i < extra else 0)
+        groups[i] = xs[start_idx:start_idx + size]
+        start_idx += size
+
+    chunks = []
+
+    for group in groups:
+        ordered = []
+
+        for j, x in enumerate(group):
+            col = [wp for wp in waypoints if round(wp[0], 6) == x]
+            col.sort(key=lambda w: w[1], reverse=(j % 2 == 1))
+            ordered.extend(col)
+
+        chunks.append(ordered)
+
+    return chunks
+
+
+def generate_nine_field_waypoints(height=30.0):
+    chunks = [[], [], []]
+
+    for row in range(3):
+        for col in range(3):
+            cx = col * 50.0
+            cy = row * 50.0
+
+            if col % 2 == 0:
+                points = [
+                    (cx - 8.0, cy - 8.0, height),
+                    (cx + 8.0, cy - 8.0, height),
+                    (cx + 8.0, cy + 8.0, height),
+                    (cx - 8.0, cy + 8.0, height),
+                ]
+            else:
+                points = [
+                    (cx - 8.0, cy + 8.0, height),
+                    (cx + 8.0, cy + 8.0, height),
+                    (cx + 8.0, cy - 8.0, height),
+                    (cx - 8.0, cy - 8.0, height),
+                ]
+
+            chunks[row].extend(points)
+
+    return chunks
+
 def plot_waypoints(waypoints_list, title):
     """Plot the waypoints for visualization"""
     import matplotlib.pyplot as plt

@@ -7,7 +7,7 @@ from launch_ros.actions import Node
 from launch.event_handlers import OnProcessExit
 from launch.actions import RegisterEventHandler
 
-from scripts.points_distributor import generate_grid_waypoints, split_serpentine
+from scripts.points_distributor import generate_nine_field_waypoints, split_serpentine
 
 # Shared field origin — must match LAT_BASE/LON_BASE in
 # src/scripts/start_drone_container.sh so the mapped field is centred on the
@@ -64,8 +64,8 @@ def generate_launch_description():
             mappers = [i for i in range(num_drones) if i not in sprayer_instances]
             sprayers = [i for i in range(num_drones) if i in sprayer_instances]
 
-            wps = generate_grid_waypoints(field_size=80.0, grid_points=5, height=30.0)
-            mapper_chunks = split_serpentine(wps, len(mappers)) if mappers else []
+            mapper_chunks = generate_nine_field_waypoints(30.0)
+            wps = [wp for chunk in mapper_chunks for wp in chunk]
             sprayer_chunks = split_serpentine(wps, len(sprayers)) if sprayers else []
             SPRAY_ALT = 15.0
 

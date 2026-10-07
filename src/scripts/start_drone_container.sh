@@ -53,6 +53,9 @@ cat /config/dds_swarm.parm >> instance_dds.parm
 # FRAME_TYPE 0 (plus) would break motor mixing and the drones never lift off.
 if [ "${USE_GAZEBO:-0}" = "1" ]; then
     cat /root/ardu_ws/src/ardupilot/Tools/autotest/default_params/gazebo-iris.parm >> instance_dds.parm
+    echo "INS_USE2 0" >> instance_dds.parm
+    echo "ARMING_ACCTHRESH 3.0" >> instance_dds.parm
+    echo "ARMING_SKIPCHK 16" >> instance_dds.parm
 fi
 
 # Sprayer role: enable ArduPilot's AC_Sprayer (pump/spinner outputs, speed-
@@ -80,7 +83,6 @@ sim_vehicle.py \
     --no-rebuild \
     ${FRAME_ARGS} \
     --out 127.0.0.1:${MAVPROXY_UDP_PORT} \
-    --out 127.0.0.1:${DDS_UDP_PORT} \
     --out 127.0.0.1:${MAVLINK_TCP_PORT} \
     --custom-location="${LAT_OFFSET}","${LON_OFFSET}",${ALT_BASE},${YAW} \
     --sysid $((INSTANCE+1)) \

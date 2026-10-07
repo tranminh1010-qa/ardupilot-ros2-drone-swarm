@@ -132,3 +132,7 @@ MOT_BAT_VOLT_MAX 12.8
 # CIRCLE 		7 !
 # POSITION 		8
 # LAND 			9 !
+
+# Use only primary SITL IMU to avoid simulated dual-accelerometer inconsistency
+INS_USE2 0
+ARMING_SKIPCHK 16

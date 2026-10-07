@@ -35,19 +35,12 @@ RUN apt-get update && apt-get install -y \
 
 # Install MAVROS and related packages
 RUN apt-get update && apt-get install -y \
-    ros-humble-mavros \
     ros-humble-mavros-msgs \
-    ros-humble-mavros-extras \
     ros-humble-geographic-msgs \
     ros-humble-geographic-info \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Install GeographicLib datasets (needed for MAVROS GPS conversions)
-RUN wget https://raw.githubusercontent.com/mavlink/mavros/ros2/mavros/scripts/install_geographiclib_datasets.sh -O /tmp/install_geographiclib_datasets.sh && \
-    chmod +x /tmp/install_geographiclib_datasets.sh && \
-    /tmp/install_geographiclib_datasets.sh && \
-    rm /tmp/install_geographiclib_datasets.sh
 
 # OpenCV + GStreamer for the drone camera pipeline: Ubuntu's python3-opencv is
 # built WITH GStreamer support (pip's opencv-python is not), which
